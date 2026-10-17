@@ -22,7 +22,8 @@ window.UNIT_LIST = [
     { id: "rigid",      title: "2 剛体のつり合い",          file: "units/rigid.js" },
     { id: "anim-momentum", title: "▶ 運動量ラボ",          href: "anim/momentum.html#collide", note: "一直線上の衝突（x-t・v-t・p-t・F-t 図が連動、力積 ＝ F-t 図の面積）、平面での合体（運動量の矢印の和）、床ではね返るボール（h′ ＝ e²h）" },
     { id: "momentum",   title: "3 運動量と力積",            file: "units/momentum.js" },
-    { id: "circular",   title: "4 円運動と慣性力",          file: null },
+    { id: "anim-circular", title: "▶ 円運動ラボ",          href: "anim/circular.html#uniform", note: "等速円運動の位置・速度・加速度ベクトル（速度を1点から並べると Δv は中心向き）、円すい振り子を地面から・回転する人から見る（遠心力）、鉛直面内の円運動と糸がたるむ位置" },
+    { id: "circular",   title: "4 円運動と慣性力",          file: "units/circular.js" },
     { id: "shm",        title: "5 単振動",                  file: null },
     { id: "gravitation",title: "6 万有引力",                file: null },
     { id: "gas",        title: "7 気体分子の運動",          file: null }

@@ -176,3 +176,6 @@ a.link{color:var(--muted)}
 .derive h4{margin:0 0 4px;font-size:15px}
 .derive p{margin:4px 0;font-size:15px}
 @media (min-width:600px){.derive{grid-template-columns:1fr 1fr}}
+/* 選択肢が長くても画面からはみ出さない */
+.selects,.selrow{min-width:0;max-width:100%}
+.selrow select{min-width:0;max-width:100%;text-overflow:ellipsis}
