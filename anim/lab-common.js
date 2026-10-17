@@ -13,7 +13,7 @@
  *     timed: true,           // 再生ボタンと時刻スライダーを出す
  *     duration(P): 再生の長さ〔s〕、 reset(P, S): 状態の初期化、 step(P, S, dt): 時間を進める
  *     draw(ctx): 描画。ctx = {P, S, T(トグル), t, stage, graphs[4], ro(html), eqs(html), banner(text,color)}
- *     graphs: 使うグラフの枚数（0〜4）、 legend: HTML、 asks: [[問い, 答え], ...]
+ *     graphs: 使うグラフの枚数（0〜4）、 wide: 横幅いっぱいにするグラフの番号の配列、 legend: HTML、 asks: [[問い, 答え], ...]
  *   }}
  * }
  * URL の #mode&key=値… でモードと値を指定できる。
@@ -131,7 +131,7 @@ function app(cfg){
     $("asks").innerHTML = (m.asks || []).map(a => `<li>${a[0]} <details><summary>答え</summary> ${a[1]}</details></li>`).join("");
     $("timebar").hidden = !m.timed;
     $("stage").style.aspectRatio = m.aspect || "";
-    const ng = m.graphs || 0; [0,1,2,3].forEach(i => $("g"+i).hidden = i >= ng); $("minis").hidden = ng === 0;
+    const ng = m.graphs || 0; [0,1,2,3].forEach(i => { $("g"+i).hidden = i >= ng; $("g"+i).style.gridColumn = (m.wide || []).includes(i) ? "1 / -1" : ""; $("g"+i).style.aspectRatio = (m.wide || []).includes(i) ? "16 / 9" : ""; }); $("minis").hidden = ng === 0;
     document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.mode === mode));
   }
   function sync(){

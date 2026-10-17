@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>万有引力ラボ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDGothic&family=BIZ+UDPGothic:wght@400;700&display=swap">
+<link rel="stylesheet" href="lab.css">
+<script src="lab-common.js"></script>
+</head>
+<body>
+<script>
+(function(){
+"use strict";
+const {f, S, V, css, prep, arrow, label, symFont, uiFont, numFont, fit, disc, table, graph} = LAB;
+const GM = 4.0e14, R = 6.4e6, PI2 = Math.PI*2, DISP = 10;   // DISP：1周などを何秒で見せるか
+
+function earth(c, tf, ink2){
+  const g = c.createRadialGradient(tf.X(0) - 0.3*R*tf.s, tf.Y(0) - 0.3*R*tf.s, 0.1*R*tf.s, tf.X(0), tf.Y(0), R*tf.s);
+  g.addColorStop(0, "#5fa8e8"); g.addColorStop(1, "#1f5fa8");
+  c.fillStyle = g; c.beginPath(); c.arc(tf.X(0), tf.Y(0), R*tf.s, 0, PI2); c.fill();
+  label(c, "地球", tf.X(0), tf.Y(0), "#fff", "center", uiFont(12, true));
+}
+
+/* ---------- 人工衛星の軌道 ---------- */
+const orbit = {
+  label:"人工衛星の軌道",
+  params:[["r0","打ち出す位置（中心から、R の何倍）",1.05,4,0.05,"R",2,2],["v0","打ち出す速さ（水平）",1,14,0.05,"km/s",2,5.6]],
+  toggles:[["area","面積速度（等しい時間の扇形）",true]],
+  timed:true, graphs:3,
+  legend:`<span><i style="background:var(--pos)"></i>衛星・軌道</span><span><i style="background:var(--vel)"></i>速度</span><span><i style="background:var(--acc)"></i>万有引力</span><span><i style="background:var(--hl2)"></i>等しい時間に通る扇形</span>`,
+  reset(P, St){
+    const r0 = P.r0*R, v0 = P.v0*1e3, eps = v0*v0/2 - GM/r0;
+    St.x = r0; St.y = 0; St.vx = 0; St.vy = v0; St.tp = 0; St.crash = false; St.trace = [[r0, 0, 0]]; St.ts = [[0, P.r0, P.v0, eps]];
+    if(eps < 0){ const a = -GM/(2*eps); St.bound = true; St.a = a; St.Tphys = PI2*Math.sqrt(a*a*a/GM); St.span = St.Tphys*1.02; }
+    else { St.bound = false; St.Tphys = null; St.span = 8*r0/v0*3; }
+    St.scale = St.span/DISP; St.secDt = St.bound ? St.Tphys/12 : St.span/12; St.secs = [[0, r0, 0]]; St.nextSec = St.secDt; St.eps = eps;
+  },
+  duration(P, St){ return DISP; },
+  step(P, St, dt){
+    if(St.crash) return;
+    let rem = dt*St.scale; const h = (St.bound ? St.Tphys : St.span)/4000;
+    while(rem > 0){
+      const d = Math.min(h, rem), r = Math.hypot(St.x, St.y), ax = -GM*St.x/r**3, ay = -GM*St.y/r**3;
+      St.vx += ax*d/2; St.vy += ay*d/2; St.x += St.vx*d; St.y += St.vy*d;
+      const r2 = Math.hypot(St.x, St.y); St.vx += -GM*St.x/r2**3*d/2; St.vy += -GM*St.y/r2**3*d/2;
+      St.tp += d; rem -= d;
+      if(r2 < R){ St.crash = true; break; }
+      if(St.tp >= St.nextSec){ St.secs.push([St.tp, St.x, St.y]); St.nextSec += St.secDt; }
+      St.trace.push([St.x, St.y, St.tp]);
+    }
+    const r = Math.hypot(St.x, St.y), v = Math.hypot(St.vx, St.vy);
+    St.ts.push([St.tp/3600, r/R, v/1e3, v*v/2 - GM/r]);
+  },
+  draw(ctx){
+    const {P, S:St, T} = ctx; const {c, w, h} = prep(ctx.stage);
+    let ext = P.r0*1.15;
+    if(St.bound){ const hh = P.r0*R*P.v0*1e3, ecc = Math.sqrt(Math.max(0, 1 + 2*St.eps*hh*hh/(GM*GM))), ra = St.a*(1 + ecc); ext = Math.min(Math.max(ext, ra/R*1.08), 14); } else ext = Math.min(Math.max(ext, 6), 14);
+    const tf = fit(w, h, {x0:-ext*R, x1:ext*R, y0:-ext*R, y1:ext*R}, 8);
+    const ink2 = css("--ink2"), ink3 = css("--ink3"), pos = css("--pos"), vel = css("--vel"), acc = css("--acc"), hl2 = css("--hl2");
+    // reference circle orbit at r0
+    c.strokeStyle = ink3; c.setLineDash([3,5]); c.beginPath(); c.arc(tf.X(0), tf.Y(0), P.r0*R*tf.s, 0, PI2); c.stroke(); c.setLineDash([]);
+    // sectors（等しい時間ごとの扇形）
+    if(T.area){
+      let cur = -1;
+      const flush = () => { if(cur >= 0){ c.lineTo(tf.X(0), tf.Y(0)); c.closePath(); c.fillStyle = hl2; c.globalAlpha = (cur % 2) ? 0.10 : 0.24; c.fill(); c.globalAlpha = 1; } };
+      const step2 = Math.max(1, Math.floor(St.trace.length/3000));
+      for(let j2 = 0; j2 < St.trace.length; j2 += step2){
+        const p = St.trace[j2], k = Math.floor(p[2]/St.secDt);
+        if(k !== cur){ if(cur >= 0){ c.lineTo(tf.X(p[0]), tf.Y(p[1])); } flush(); cur = k; c.beginPath(); c.moveTo(tf.X(0), tf.Y(0)); }
+        c.lineTo(tf.X(p[0]), tf.Y(p[1]));
+      }
+      flush();
+    }
+    // trajectory
+    c.strokeStyle = pos; c.lineWidth = 1.8; c.beginPath(); const step = Math.max(1, Math.floor(St.trace.length/1500));
+    St.trace.forEach((p, i) => { if(i % step === 0 || i === St.trace.length - 1){ i ? c.lineTo(tf.X(p[0]), tf.Y(p[1])) : c.moveTo(tf.X(p[0]), tf.Y(p[1])); } }); c.stroke();
+    earth(c, tf, ink2);
+    const sx = tf.X(St.x), sy = tf.Y(St.y), r = Math.hypot(St.x, St.y), v = Math.hypot(St.vx, St.vy);
+    const kv = 0.35*Math.min(w, h)/14e3;
+    arrow(c, sx, sy, sx + St.vx*kv, sy - St.vy*kv, vel, 2.6);
+    const ga = Math.max(16, Math.min(80, 34*(GM/(r*r))/(GM/(P.r0*R)**2)));
+    arrow(c, sx, sy, sx - St.x/r*ga, sy + St.y/r*ga, acc, 2.2);
+    disc(c, sx, sy, 6, pos);
+    const vc = Math.sqrt(GM/(P.r0*R))/1e3, ve = Math.sqrt(2*GM/(P.r0*R))/1e3;
+    let type;
+    if(St.crash) type = "地表に落ちた（速さが足りない）";
+    else if(Math.abs(P.v0 - vc) < 0.03) type = "円軌道（v₀ ＝ √(GM/r)）";
+    else if(P.v0 < vc) type = "楕円軌道（打ち出した点が遠地点）";
+    else if(P.v0 < ve - 1e-9) type = "楕円軌道（打ち出した点が近地点）";
+    else type = P.v0 < ve + 0.03 ? "放物線軌道（ちょうど脱出）" : "双曲線軌道（地球から離れていく）";
+    ctx.banner(type, St.crash ? "--neg" : St.bound ? "--ui" : "--acc");
+    const ts = St.ts;
+    graph(ctx.graphs[0], {title:"中心からの距離 r-t（R の何倍）", unit:"", tmax:St.span/3600, t:St.tp/3600, ylo:0, series:[{pts:ts.map(p => [p[0], p[1]]), color:"--pos"}]});
+    graph(ctx.graphs[1], {title:"速さ v-t", unit:"km/s", tmax:St.span/3600, t:St.tp/3600, ylo:0, series:[{pts:ts.map(p => [p[0], p[2]]), color:"--vel"}]});
+    graph(ctx.graphs[2], {title:"1 kg あたりのエネルギー（×10⁷ J）", unit:"", tmax:St.span/3600, t:St.tp/3600, series:[
+      {pts:ts.map(p => [p[0], (p[2]*1e3)**2/2/1e7]), color:"--vel", name:"運動"}, {pts:ts.map(p => [p[0], -GM/(p[1]*R)/1e7]), color:"--hl2", name:"位置"}, {pts:ts.map(p => [p[0], p[3]/1e7]), color:"--acc", name:"和"}]});
+    const rows = [[`経過時間`, `${f(St.tp/3600,2)} h`], [`いまの距離・速さ`, `${f(r/R,2)} R・${f(v/1e3,2)} km/s`],
+      [`この位置での円軌道の速さ √(${S("G")}${S("M")}/${S("r")})`, `${f(vc,2)} km/s`], [`脱出速度 √(2${S("G")}${S("M")}/${S("r")})`, `${f(ve,2)} km/s`],
+      [`力学的エネルギー（1 kg あたり）`, `${f(St.eps/1e7,3)} × 10⁷ J（${St.eps < 0 ? "負：束縛" : "0以上：脱出"}）`]];
+    if(St.bound) rows.push([`周期`, `${f(St.Tphys/3600,2)} h`], [`面積速度 ½${S("r")}${S("v")}`, `${f(0.5*P.r0*R*P.v0*1e3/1e10,3)} × 10¹⁰ m²/s（一定）`]);
+    ctx.ro(table(rows));
+    ctx.eqs(`<p class="eq">${S("G")}${S("M")} ＝ ${S("g")}${S("R")}² ≒ 4.0 × 10¹⁴ m³/s²、${S("R")} ＝ 6.4 × 10⁶ m。扇形は ${St.bound ? "周期の 1/12" : "等しい時間"} ごと。どれも面積が等しい（ケプラーの第2法則）。</p>
+      <p class="eq">½${S("m")}${S("v")}² − ${S("G")}${S("M")}${S("m")}/${S("r")} ＝ 一定（緑の線が水平）。近づくと位置エネルギーが減り、速くなる。</p>`);
+  },
+  asks:[
+    ["r₀ ＝ 2R で v₀ ＝ 5.6 km/s にしよう。どんな軌道か。周期は？", "円軌道。周期は約 4.0 h。"],
+    ["v₀ を 6.5 km/s に上げよう。扇形（等しい時間に通る部分）の形を比べよう。", "遠地点の近くでは細長く、近地点の近くでは太く短い。面積は等しい（面積速度一定）。"],
+    ["v₀ を √2 倍（約 7.9 km/s）にするとどうなるか。エネルギーのグラフの「和」は？", "脱出する（放物線）。力学的エネルギーの和がちょうど 0。"],
+    ["v₀ を 4.0 km/s に下げよう。", "楕円の遠地点から落ちていき、近地点が地球の半径より小さいと地表に落ちる。"]
+  ]
+};
+
+/* ---------- ケプラーの第3法則 ---------- */
+const PLANETS = [["水星", 0.387, "#9a8f86"], ["金星", 0.723, "#d9b25e"], ["地球", 1.0, "#3a86d6"], ["火星", 1.524, "#d0623b"], ["木星", 5.203, "#c99a6a"], ["土星", 9.537, "#d8c38a"]];
+const kepler = {
+  label:"ケプラーの第3法則",
+  params:[["a","自分で置く惑星の軌道半径",0.3,10,0.05,"天文単位",2,2.5]],
+  toggles:[["outer","木星・土星も表示",false]],
+  timed:true, graphs:1, wide:[0],
+  legend:`<span><i style="background:#e8a32e"></i>太陽</span><span><i style="background:var(--hl2)"></i>自分で置いた惑星</span>`,
+  reset(){}, duration(){ return 24; }, step(){},
+  draw(ctx){
+    const {P, t, T} = ctx; const {c, w, h} = prep(ctx.stage);
+    const yrs = t*0.25, list = PLANETS.filter(p => T.outer || p[1] < 3);
+    const amax = Math.max(...list.map(p => p[1]), P.a)*1.08;
+    const tf = fit(w, h, {x0:-amax, x1:amax, y0:-amax, y1:amax}, 8);
+    const ink3 = css("--ink3"), hl2 = css("--hl2"), ink2 = css("--ink2");
+    disc(c, tf.X(0), tf.Y(0), 9, "#e8a32e");
+    list.concat([["あなたの惑星", P.a, hl2]]).forEach(([n, a, col]) => {
+      c.strokeStyle = ink3; c.globalAlpha = 0.5; c.beginPath(); c.arc(tf.X(0), tf.Y(0), a*tf.s, 0, PI2); c.stroke(); c.globalAlpha = 1;
+      const Tp = Math.pow(a, 1.5), th = PI2*yrs/Tp, x = a*Math.cos(th), y = a*Math.sin(th);
+      disc(c, tf.X(x), tf.Y(y), n === "あなたの惑星" ? 7 : 6, col);
+      if(a*tf.s > 22 || n === "あなたの惑星") label(c, n, tf.X(x) + 8, tf.Y(y) - 8, n === "あなたの惑星" ? hl2 : ink2, "left", uiFont(11));
+    });
+    label(c, `経過 ${f(yrs,2)} 年`, 10, 14, ink2, "left", uiFont(12, true));
+    ctx.banner(`あなたの惑星：a ＝ ${f(P.a,2)} 天文単位 → 周期 a^(3/2) ＝ ${f(Math.pow(P.a,1.5),2)} 年`, "--hl2");
+    // T vs a^(3/2): straight line
+    const pts = PLANETS.filter(p => T.outer || p[1] < 3).map(p => [Math.pow(p[1], 1.5), Math.pow(p[1], 1.5)]);
+    const xm = Math.max(...pts.map(p => p[0]), Math.pow(P.a, 1.5))*1.05;
+    const gr = graph(ctx.graphs[0], {title:"周期 T（年）と a^(3/2)（横軸）", unit:"", tmax:xm, ylo:0, yhi:xm, series:[{fn:x => x, color:"--ink3"}]});
+    PLANETS.filter(p => T.outer || p[1] < 3).forEach(p => { const x = Math.pow(p[1], 1.5); disc(gr.c, gr.X(x), gr.Y(x), 4, p[2]); });
+    disc(gr.c, gr.X(Math.pow(P.a,1.5)), gr.Y(Math.pow(P.a,1.5)), 5, hl2);
+    const realT = {水星:0.241, 金星:0.615, 地球:1.0, 火星:1.881, 木星:11.86, 土星:29.46};
+    ctx.ro(table([["惑星（a〔天文単位〕・実際の T〔年〕）", "T² ÷ a³"]].concat(PLANETS.map(p => [`${p[0]}（${p[1]}・${realT[p[0]]}）`, f(realT[p[0]]**2/p[1]**3, 3)]))));
+    ctx.eqs(`<p class="eq">円軌道：${S("m")}${S("r")}${S("ω")}² ＝ ${S("G")}${S("M")}${S("m")}/${S("r")}² → ${S("T")}² ＝ (4π²/${S("G")}${S("M")})${S("r")}³。比例定数は太陽の質量 ${S("M")} だけで決まり、惑星によらない。</p><p class="eq">地球を基準（a ＝ 1 天文単位、T ＝ 1 年）にすると ${S("T")} ＝ ${S("a")}<sup>3/2</sup>。</p>`);
+  },
+  asks:[
+    ["表の T²/a³ を見よう。惑星によって変わるか。", "どれもほぼ 1.00（地球の単位で）。第3法則。"],
+    ["自分の惑星の半径を 4 天文単位にすると、周期は何年か。", "4^(3/2) ＝ 8 年。"],
+    ["外側の惑星ほど、1周が遅いのはなぜか（2つの理由）。", "軌道が長いことと、速さが遅いこと（v ∝ 1/√r）。だから T ∝ r^(3/2) と、r より速く増える。"]
+  ]
+};
+
+/* ---------- 打ち上げと第2宇宙速度 ---------- */
+const escape = {
+  label:"打ち上げと第2宇宙速度",
+  params:[["v0","打ち上げる速さ（鉛直上向き）",1,14,0.05,"km/s",2,11.2]],
+  timed:true, graphs:2, wide:[0,1],
+  legend:`<span><i style="background:var(--pos)"></i>物体</span><span><i style="background:var(--hl2)"></i>位置エネルギー U(r)/m ＝ −GM/r</span><span><i style="background:var(--acc)"></i>力学的エネルギー（一定）</span><span><i style="background:var(--vel)"></i>運動エネルギー</span>`,
+  reset(P, St){
+    const v0 = P.v0*1e3, E = v0*v0/2 - GM/R; St.E = E; St.r = R; St.v = v0; St.tp = 0; St.done = false; St.ts = [[0, 1, P.v0]];
+    St.rmax = E < 0 ? GM/(-E) : Infinity;
+    let span = 0;
+    if(E < 0){ // 上がって落ちてくるまでの時間（数値的に）
+      let r = R, v = v0, tt = 0; const hh = 2; while(tt < 3.6e5){ v += -GM/(r*r)*hh; r += v*hh; tt += hh; if(r < R){ break; } } span = tt*1.02;
+    } else span = 24*3600;
+    St.span = Math.min(span, 48*3600); St.scale = St.span/DISP;
+  },
+  duration(){ return DISP; },
+  step(P, St, dt){
+    if(St.done) return;
+    let rem = dt*St.scale; const h = St.span/6000;
+    while(rem > 0){ const d = Math.min(h, rem); St.v += -GM/(St.r*St.r)*d/2; St.r += St.v*d; St.v += -GM/(St.r*St.r)*d/2; St.tp += d; rem -= d; if(St.r < R){ St.r = R; St.done = true; break; } }
+    St.ts.push([St.tp/3600, St.r/R, St.v/1e3]);
+  },
+  draw(ctx){
+    const {P, S:St} = ctx; const {c, w, h} = prep(ctx.stage);
+    const top = Math.min(Math.max(St.rmax === Infinity ? 12 : St.rmax/R*1.1, 2), 12);
+    const tf = fit(w, h, {x0:-1.3*R, x1:1.3*R, y0:-1.15*R, y1:top*R}, 8);
+    const ink2 = css("--ink2"), ink3 = css("--ink3"), pos = css("--pos"), vel = css("--vel");
+    earth(c, tf, ink2);
+    for(let k = 2; k <= top; k += (top > 6 ? 2 : 1)){ c.strokeStyle = ink3; c.setLineDash([2,4]); c.beginPath(); c.moveTo(tf.X(-0.25*R), tf.Y(k*R)); c.lineTo(tf.X(0.25*R), tf.Y(k*R)); c.stroke(); c.setLineDash([]); label(c, `${k}R`, tf.X(0.3*R), tf.Y(k*R), ink3, "left", numFont(10)); }
+    if(St.rmax !== Infinity && St.rmax/R <= top){ c.strokeStyle = css("--acc"); c.beginPath(); c.moveTo(tf.X(-0.45*R), tf.Y(St.rmax)); c.lineTo(tf.X(0.45*R), tf.Y(St.rmax)); c.stroke(); label(c, "最高点", tf.X(-0.5*R), tf.Y(St.rmax), css("--acc"), "right", uiFont(11)); }
+    const y = Math.min(St.r, top*R);
+    disc(c, tf.X(0), tf.Y(y), 6, pos);
+    if(St.v !== 0) arrow(c, tf.X(0) + 12, tf.Y(y), tf.X(0) + 12, tf.Y(y) - St.v/1e3*4, vel, 2.6);
+    const ve = Math.sqrt(2*GM/R)/1e3;
+    ctx.banner(St.E >= 0 ? `第2宇宙速度 ${f(ve,2)} km/s 以上：力学的エネルギーが 0 以上なので、無限遠まで行ける` : `力学的エネルギーが負：最高点（中心から ${f(St.rmax/R,2)}R）で止まって落ちてくる`, St.E >= 0 ? "--acc" : "--ui");
+    // U(r) diagram
+    const {c:g, w:gw, h:gh} = prep(ctx.graphs[0]);
+    const rmaxPlot = 12, Umin = -GM/R, pl = 8, pr = 8, pt = 22, pb = 16;
+    const lo = Umin*1.1, hi = Math.max(St.E, 0) + 0.25*(-Umin);
+    const X = rr => pl + (rr - 1)/(rmaxPlot - 1)*(gw - pl - pr), Y = u => gh - pb - (u - lo)/(hi - lo)*(gh - pt - pb);
+    g.strokeStyle = css("--grid2"); g.beginPath(); g.moveTo(pl, Y(0)); g.lineTo(gw - pr, Y(0)); g.stroke();
+    g.font = uiFont(12); g.fillStyle = ink2; g.textBaseline = "middle"; g.fillText("1 kg あたりのエネルギーと r（1R〜12R）", pl + 4, 10);
+    g.strokeStyle = css("--hl2"); g.lineWidth = 2.2; g.beginPath(); for(let i = 0; i <= 120; i++){ const rr = 1 + (rmaxPlot - 1)*i/120, u = -GM/(rr*R); i ? g.lineTo(X(rr), Y(u)) : g.moveTo(X(rr), Y(u)); } g.stroke();
+    g.strokeStyle = css("--acc"); g.lineWidth = 2; g.beginPath(); g.moveTo(X(1), Y(St.E)); g.lineTo(X(rmaxPlot), Y(St.E)); g.stroke();
+    const rr = Math.min(St.r/R, rmaxPlot), u = -GM/St.r;
+    g.strokeStyle = css("--vel"); g.lineWidth = 3; g.beginPath(); g.moveTo(X(rr), Y(u)); g.lineTo(X(rr), Y(St.E)); g.stroke();
+    disc(g, X(rr), Y(u), 4, css("--hl2"));
+    g.font = numFont(11); g.fillStyle = css("--vel"); g.textAlign = "left"; g.fillText("運動エネルギー", Math.min(X(rr) + 6, gw - 80), (Y(u) + Y(St.E))/2);
+    graph(ctx.graphs[1], {title:"高さ（中心から R の何倍）", unit:"", tmax:St.span/3600, t:St.tp/3600, ylo:0, series:[{pts:St.ts.map(p => [p[0], p[1]]), color:"--pos"}]});
+    ctx.ro(table([[`第1宇宙速度 √(${S("g")}${S("R")})`, `${f(Math.sqrt(GM/R)/1e3,2)} km/s`], [`第2宇宙速度 √(2${S("g")}${S("R")})`, `${f(ve,2)} km/s`], [`力学的エネルギー（1 kg あたり）`, `${f(St.E/1e7,3)} × 10⁷ J`], [`最高点（中心から）`, St.rmax === Infinity ? "無限遠" : `${f(St.rmax/R,3)} R`], [`いまの高さ・速さ`, `${f(St.r/R,2)} R・${f(St.v/1e3,2)} km/s`], [`経過時間`, `${f(St.tp/3600,2)} h`]]));
+    ctx.eqs(`<p class="eq">½${S("v")}<sub>0</sub>² − ${S("G")}${S("M")}/${S("R")} ＝ ½${S("v")}² − ${S("G")}${S("M")}/${S("r")}（1 kg あたり）　最高点：${S("v")} ＝ 0</p><p class="eq">右の図：緑の水平線（全エネルギー）と紫の曲線（位置エネルギー）の差が運動エネルギー。緑の線が 0 以上なら、どこまでも曲線より上にあり、止まらない。</p>`);
+  },
+  asks:[
+    ["v₀ ＝ 7.9 km/s で打ち上げよう。最高点はどこか。", "中心から 2R（地表から高さ R）。mgh で計算すると √(2gR) が必要に見えるが、重力が弱くなるので √(gR) でよい。"],
+    ["v₀ ＝ 11.2 km/s で、右の図の緑の線はどこにあるか。", "ちょうど 0。位置エネルギーの曲線は 0 に近づくだけなので、運動エネルギーが 0 になる点がない（無限遠まで行ける）。"],
+    ["v₀ を 11.0 km/s と 11.4 km/s で比べよう。", "11.0 では非常に高く上がって戻ってくる。11.4 では戻らない。"]
+  ]
+};
+
+LAB.app({title:"万有引力ラボ", modes:{orbit, kepler, escape}});
+})();
+</script>
+</body>
+</html>

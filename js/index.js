@@ -26,7 +26,8 @@ window.UNIT_LIST = [
     { id: "circular",   title: "4 円運動と慣性力",          file: "units/circular.js" },
     { id: "anim-shm",   title: "▶ 単振動ラボ",            href: "anim/shm.html#circle", note: "等速円運動の影が単振動（x・v・a のグラフが連動）、ばね振り子（水平・鉛直）とエネルギー、単振り子（振れ角が大きいと周期が長くなる）" },
     { id: "shm",        title: "5 単振動",                  file: "units/shm.js" },
-    { id: "gravitation",title: "6 万有引力",                file: null },
+    { id: "anim-gravitation", title: "▶ 万有引力ラボ",     href: "anim/gravitation.html#orbit", note: "人工衛星の軌道（円・楕円・放物線・双曲線、等しい時間の扇形で面積速度一定、エネルギーのグラフ）、ケプラーの第3法則、打ち上げと第2宇宙速度（U(r) ＝ −GM/r の図）" },
+    { id: "gravitation",title: "6 万有引力",                file: "units/gravitation.js" },
     { id: "gas",        title: "7 気体分子の運動",          file: null }
   ]},
   { group: "(2) 波", units: [

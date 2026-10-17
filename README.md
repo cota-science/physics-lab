@@ -22,6 +22,7 @@ units/            単元ファイル（1単元＝1ファイル）
   momentum.js     3 運動量と力積
   circular.js     4 円運動と慣性力
   shm.js          5 単振動
+  gravitation.js  6 万有引力
 anim/             シミュレーター
   lab.css         シミュレーター共通の見た目
   lab-common.js   シミュレーター共通部品（LAB.app でタブ・設定・再生・グラフ・URL 指定を組み立てる）
@@ -30,6 +31,7 @@ anim/             シミュレーター
   momentum.html   運動量ラボ（#collide 一直線上の衝突／#merge 平面での合体／#bounce 床ではね返るボール）
   circular.html   円運動ラボ（#uniform 等速円運動のベクトル／#conical 円すい振り子と遠心力／#vertical 鉛直面内の円運動）
   shm.html        単振動ラボ（#circle 円運動の影／#spring ばね振り子とエネルギー／#pendulum 大きな振れ角の単振り子）
+  gravitation.html 万有引力ラボ（#orbit 人工衛星の軌道と面積速度／#kepler ケプラーの第3法則／#escape 打ち上げと第2宇宙速度）
 ```
 
 ## 単元のつくり
@@ -61,6 +63,7 @@ URL の `#` 以降で、モードと値を指定して開けます。問題文�
 - `anim/momentum.html#collide&m1=2&m2=1&v1=3&v2=0&e=0.5`
 - `anim/circular.html#vertical&r=0.4&v0=4.43&m=0.1`
 - `anim/shm.html#spring&k=49&m=0.5&A=0.05&dir=v`
+- `anim/gravitation.html#orbit&r0=2&v0=5.6`
 
 ## 進み具合
 
@@ -71,7 +74,8 @@ URL の `#` 以降で、モードと値を指定して開けます。問題文�
 | | 3 運動量と力積 | ✓ | 運動量ラボ |
 | | 4 円運動と慣性力 | ✓ | 円運動ラボ |
 | | 5 単振動 | ✓ | 単振動ラボ |
-| | 6 万有引力 〜 7 気体分子の運動 | 準備中 | |
+| | 6 万有引力 | ✓ | 万有引力ラボ |
+| | 7 気体分子の運動 | 準備中 | |
 | (2) 波 | 8 〜 10 | 準備中 | |
 | (3) 電気と磁気 | 11 〜 16 | 準備中 | |
 | (4) 原子 | 17 〜 18 | 準備中 | |
