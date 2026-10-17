@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>平面運動ラボ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDGothic&family=BIZ+UDPGothic:wght@400;700&display=swap">
+<style>
+/* Layout: 左に実験台（軌道・ストロボ・ベクトル）、右に「速度を1点から並べた図」または「到達距離のグラフ」と、4枚のグラフ（接線の傾き＝微分、面積＝積分）。下に設定と数値・式。 */
+:root{
+  --bg:#eef2f1; --surface:#ffffff; --surface2:#f6f8f8; --line:#d3dcda; --grid:#e6ecea; --grid2:#cfd9d6;
+  --ink:#18222e; --ink2:#4a5866; --ink3:#7b8894;
+  --ui:#24406a; --ui-soft:#e3eaf4;
+  --pos:#1d64d8; --vel:#dd5a12; --acc:#22863a; --hl2:#7a4ad8; --hl2-a:rgba(122,74,216,.20); --neg-a:rgba(196,40,90,.18);
+  --ghost:#8a96a3; --ground:#b9a888;
+  --f-ui:"BIZ UDPGothic","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+  --f-num:"BIZ UDGothic","BIZ UDPGothic",ui-monospace,"Consolas",monospace;
+  --f-sym:"Bookman Old Style","Cambria Math","Cambria","Times New Roman",serif;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10161c; --surface:#171f27; --surface2:#1d2630; --line:#2c3844; --grid:#222c36; --grid2:#33414e;
+  --ink:#e4ebf1; --ink2:#a9b6c2; --ink3:#7d8a96; --ui:#8fb3ec; --ui-soft:#22324a;
+  --pos:#62a3ff; --vel:#ff9150; --acc:#5dd27a; --hl2:#b293ff; --hl2-a:rgba(178,147,255,.24); --neg-a:rgba(255,92,140,.20);
+  --ghost:#7e8b98; --ground:#6d6250; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#10161c; --surface:#171f27; --surface2:#1d2630; --line:#2c3844; --grid:#222c36; --grid2:#33414e;
+  --ink:#e4ebf1; --ink2:#a9b6c2; --ink3:#7d8a96; --ui:#8fb3ec; --ui-soft:#22324a;
+  --pos:#62a3ff; --vel:#ff9150; --acc:#5dd27a; --hl2:#b293ff; --hl2-a:rgba(178,147,255,.24); --neg-a:rgba(255,92,140,.20);
+  --ghost:#7e8b98; --ground:#6d6250; color-scheme:dark;}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:14px;line-height:1.6;padding:0 16px 32px;-webkit-text-size-adjust:100%}
+.wrap{max-width:1280px;margin:0 auto}
+.s{font-family:var(--f-sym);font-style:italic}
+.vb{font-family:var(--f-sym);font-style:italic;font-weight:700}
+sub{font-size:.72em;line-height:0}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+:focus-visible{outline:3px solid var(--ui);outline-offset:2px}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;padding:12px 0 8px}
+.top a.back{color:var(--ui);text-decoration:none;font-size:14px}
+.top h1{font-size:19px;margin:0}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.tabs button{border:1.5px solid var(--line);background:var(--surface);color:var(--ink2);border-radius:999px;padding:6px 14px;font:inherit;font-weight:700;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--ui);border-color:var(--ui);color:var(--surface)}
+.grid{display:grid;gap:12px}
+@media (min-width:920px){.grid{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;min-width:0}
+.card h2{font-size:14px;margin:0 0 6px;color:var(--ink2);font-weight:700}
+canvas{display:block;width:100%;touch-action:pan-y}
+#stage{aspect-ratio:16/10;min-height:240px}
+#aux{aspect-ratio:16/10}
+.graphs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.graphs canvas{aspect-ratio:4/3;background:var(--surface2);border-radius:6px}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}
+.btn{border:1.5px solid var(--ui);background:var(--ui);color:var(--surface);border-radius:8px;padding:6px 14px;font:inherit;font-weight:700;cursor:pointer;min-width:44px;min-height:36px}
+.btn.ghost{background:transparent;color:var(--ui)}
+.time{flex:1 1 160px;display:flex;align-items:center;gap:8px;min-width:0}
+.time input{flex:1;min-width:0}
+.ctrls{display:grid;gap:8px 16px;grid-template-columns:1fr}
+@media (min-width:640px){.ctrls{grid-template-columns:1fr 1fr}}
+.ctrl label{display:flex;justify-content:space-between;gap:8px;font-weight:700;color:var(--ink2)}
+.ctrl input[type=range]{width:100%;accent-color:var(--ui)}
+.ctrl select{font:inherit;padding:4px 6px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.toggles{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px}
+.toggles label{display:flex;align-items:center;gap:4px;cursor:pointer}
+.toggles input{accent-color:var(--ui);width:18px;height:18px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--ink2);margin-top:6px}
+.legend i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:4px;border-radius:2px}
+table.ro{border-collapse:collapse;width:100%;font-size:14px}
+table.ro td{padding:3px 6px;border-bottom:1px solid var(--grid)}
+table.ro td:last-child{text-align:right}
+.eq{font-size:14px;margin:4px 0;overflow-wrap:anywhere}
+.eq b{color:var(--ui)}
+details.ask{margin-top:6px}
+details.ask summary{cursor:pointer;font-weight:700;color:var(--ui)}
+.qs{margin:6px 0 0;padding-left:1.4em}
+.qs li{margin:4px 0}
+.qs details{display:inline}
+.qs details summary{display:inline;cursor:pointer;color:var(--ui);font-size:13px}
+.note{font-size:13px;color:var(--ink3);margin:6px 0 0}
+.tag{display:inline-block;font-size:11px;font-weight:700;border-radius:4px;padding:0 5px;margin-right:4px;vertical-align:1px;line-height:1.6}
+.tag.c{color:#7a3db8;border:1px solid #7a3db8}
+.tag.n{color:var(--ink3);border:1px solid var(--ink3)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .tag.c{color:#c9a2ff;border-color:#c9a2ff}}
+:root[data-theme="dark"] .tag.c{color:#c9a2ff;border-color:#c9a2ff}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <a class="back" href="../index.html">‹ 物理ラボ</a>
+  <h1>平面運動ラボ</h1>
+</header>
+<nav class="tabs" role="tablist" aria-label="モード">
+  <button role="tab" data-mode="proj">放物運動とベクトル</button>
+  <button role="tab" data-mode="range">角度と到達距離</button>
+  <button role="tab" data-mode="slope">斜面への投射</button>
+</nav>
+
+<div class="grid">
+  <section class="card" aria-labelledby="hStage">
+    <h2 id="hStage">運動のようす</h2>
+    <canvas id="stage" role="img" aria-label="物体の軌道と、位置・速度・加速度のベクトル"></canvas>
+    <div class="legend">
+      <span><i style="background:var(--pos)"></i>軌道・位置</span>
+      <span><i style="background:var(--vel)"></i>速度 <span class="vb">v</span></span>
+      <span><i style="background:var(--acc)"></i>加速度 <span class="vb">a</span></span>
+      <span id="lgSlope" hidden><i style="background:var(--hl2)"></i>斜面からの距離</span>
+    </div>
+    <div class="bar">
+      <button class="btn" id="play" type="button">▶ 再生</button>
+      <button class="btn ghost" id="reset" type="button" aria-label="最初にもどす">⟲</button>
+      <div class="time"><span class="num" id="tLabel">t = 0.00 s</span><input type="range" id="tSlider" min="0" max="1000" value="0" aria-label="時刻"></div>
+      <select id="speed" class="ctrl" aria-label="再生の速さ" style="font:inherit;padding:4px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink)">
+        <option value="0.25">×0.25</option><option value="0.5">×0.5</option><option value="1" selected>×1</option>
+      </select>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="hAux">
+    <h2 id="hAux">速度を1点から並べる</h2>
+    <canvas id="aux" role="img" aria-label="補助の図"></canvas>
+    <p class="note" id="auxNote"></p>
+    <div class="graphs" id="graphs">
+      <canvas id="g0"></canvas><canvas id="g1"></canvas><canvas id="g2"></canvas><canvas id="g3"></canvas>
+    </div>
+    <p class="note"><span class="tag n">微積なし</span>紫の線：<b>接線の傾き</b>（位置のグラフ）と<b>面積</b>（速度のグラフ）。<span class="tag c">微積</span>傾き ＝ 微分 d/d<span class="s">t</span>、面積 ＝ 積分 ∫d<span class="s">t</span>。</p>
+  </section>
+
+  <section class="card" aria-labelledby="hCtrl">
+    <h2 id="hCtrl">設定</h2>
+    <div class="ctrls">
+      <div class="ctrl"><label for="v0"><span>初速度の大きさ <span class="s">v</span><sub>0</sub></span><span class="num" id="v0v"></span></label><input type="range" id="v0" min="1" max="40" step="0.1"></div>
+      <div class="ctrl" id="cTh"><label for="th"><span>投げる角度 <span class="s">θ</span>（水平から）</span><span class="num" id="thv"></span></label><input type="range" id="th" min="-45" max="90" step="1"></div>
+      <div class="ctrl" id="cH"><label for="h"><span>投げる高さ <span class="s">h</span></span><span class="num" id="hv"></span></label><input type="range" id="h" min="0" max="60" step="0.1"></div>
+      <div class="ctrl" id="cAl" hidden><label for="al"><span>斜面の傾斜角 <span class="s">α</span></span><span class="num" id="alv"></span></label><input type="range" id="al" min="10" max="60" step="1"></div>
+      <div class="ctrl"><label for="gsel"><span>重力加速度 <span class="s">g</span></span></label>
+        <select id="gsel"><option value="9.8">地球 9.8 m/s²</option><option value="1.6">月 1.6 m/s²</option><option value="3.7">火星 3.7 m/s²</option><option value="24.8">木星 24.8 m/s²</option></select></div>
+    </div>
+    <div class="toggles">
+      <label><input type="checkbox" id="tgVel" checked>速度</label>
+      <label><input type="checkbox" id="tgComp" checked>速度の成分</label>
+      <label><input type="checkbox" id="tgAcc" checked>加速度</label>
+      <label><input type="checkbox" id="tgStrobe" checked>ストロボ</label>
+      <label><input type="checkbox" id="tgTan" checked>傾き・面積</label>
+      <label id="lbAxes" hidden><input type="checkbox" id="tgAxes">斜面に沿った軸</label>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="hRo">
+    <h2 id="hRo">数値と式</h2>
+    <div id="ro"></div>
+    <div id="eqs"></div>
+    <details class="ask" open><summary>見てみよう</summary><ol class="qs" id="asks"></ol></details>
+  </section>
+</div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const $ = id => document.getElementById(id);
+const P = {mode:"proj", v0:19.6, th:45, h:0, g:9.8, al:30};
+const SHOW = {vel:true, comp:true, acc:true, strobe:true, tan:true, axes:false};
+let t = 0, playing = false, last = null, speed = 1;
+
+/* ---------- physics ---------- */
+const rad = d => d*Math.PI/180;
+function launch(th){ return {vx:P.v0*Math.cos(rad(th)), vy:P.v0*Math.sin(rad(th))}; }
+function flightT(th){
+  if(P.mode === "slope") return 2*P.v0*Math.tan(rad(P.al))/P.g;
+  const {vy} = launch(th); const D = vy*vy + 2*P.g*P.h;
+  const T = (vy + Math.sqrt(Math.max(D,0)))/P.g;
+  return T > 1e-6 ? T : 0;
+}
+function state(tt, th){
+  if(P.mode === "slope"){ return {x:P.v0*tt, y:-0.5*P.g*tt*tt, vx:P.v0, vy:-P.g*tt}; }
+  const L = launch(th);
+  return {x:L.vx*tt, y:P.h + L.vy*tt - 0.5*P.g*tt*tt, vx:L.vx, vy:L.vy - P.g*tt};
+}
+let T = 0;
+function recompute(){ T = flightT(P.th); if(t > T) t = T; }
+function strobeDt(){ const c = [0.05,0.1,0.2,0.25,0.5,1,2,5]; for(const d of c) if(T/d <= 14) return d; return 10; }
+
+/* ---------- format ---------- */
+const f = (n, d=2) => (Math.abs(n) < 0.5*Math.pow(10,-d) ? 0 : n).toFixed(d).replace("-", "−");
+const S = s => `<span class="s">${s}</span>`;
+const V = s => `<span class="vb">${s}</span>`;
+
+/* ---------- canvas helpers ---------- */
+function css(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function prep(cv){
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
+  if(cv.width !== Math.round(w*dpr) || cv.height !== Math.round(h*dpr)){ cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr); }
+  const c = cv.getContext("2d"); c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,w,h);
+  return {c, w, h};
+}
+function niceStep(span, n){ const raw = span/n; const p = Math.pow(10, Math.floor(Math.log10(raw))); const q = raw/p; return (q < 1.5 ? 1 : q < 3 ? 2 : q < 7 ? 5 : 10)*p; }
+function arrow(c, x1, y1, x2, y2, color, w=2.4, dash){
+  const L = Math.hypot(x2-x1, y2-y1); if(L < 1.5) return;
+  c.save(); c.strokeStyle = color; c.fillStyle = color; c.lineWidth = w; if(dash) c.setLineDash(dash);
+  c.beginPath(); c.moveTo(x1,y1); c.lineTo(x2,y2); c.stroke(); c.setLineDash([]);
+  const a = Math.atan2(y2-y1, x2-x1), hl = Math.min(10, L*0.45);
+  c.beginPath(); c.moveTo(x2,y2); c.lineTo(x2-hl*Math.cos(a-0.4), y2-hl*Math.sin(a-0.4)); c.lineTo(x2-hl*Math.cos(a+0.4), y2-hl*Math.sin(a+0.4)); c.closePath(); c.fill();
+  c.restore();
+}
+function label(c, txt, x, y, color, align="left", font){
+  c.save(); c.fillStyle = color; c.font = font || `13px ${css("--f-ui")}`; c.textAlign = align; c.textBaseline = "middle";
+  c.fillText(txt, x, y); c.restore();
+}
+const symFont = (px=14) => `italic ${px}px ${css("--f-sym")}`;
+
+/* ---------- stage ---------- */
+function bounds(){
+  let xmin = 0, xmax = 1, ymin = 0, ymax = 1;
+  const ths = P.mode === "range" ? [15,30,45,60,75,P.th] : [P.th];
+  if(P.mode === "slope"){
+    const R = P.v0*T; xmax = Math.max(R*1.32, 1); ymin = Math.min(-R*Math.tan(rad(P.al))*1.3, -1); ymax = Math.max(0.12*(xmax - ymin), 0.5);
+    return {xmin:-0.04*xmax, xmax, ymin, ymax};
+  }
+  for(const th of ths){
+    const Tt = flightT(th), L = launch(th);
+    xmax = Math.max(xmax, L.vx*Tt); xmin = Math.min(xmin, L.vx*Tt);
+    const top = L.vy > 0 ? P.h + L.vy*L.vy/(2*P.g) : P.h; ymax = Math.max(ymax, top);
+  }
+  const span = Math.max(xmax - xmin, ymax - ymin);
+  return {xmin: xmin - 0.05*span - (P.h > 0 ? 0.06*span : 0), xmax: xmax + 0.12*span, ymin: ymin - 0.04*span, ymax: ymax + 0.08*span};
+}
+function drawStage(){
+  const {c, w, h} = prep($("stage"));
+  const b = bounds();
+  const pl = 34, pr = 10, pt = 10, pb = 24;
+  const s = Math.min((w-pl-pr)/(b.xmax-b.xmin), (h-pt-pb)/(b.ymax-b.ymin));
+  const X = x => pl + (x - b.xmin)*s, Y = y => h - pb - (y - b.ymin)*s;
+  const ink2 = css("--ink2"), ink3 = css("--ink3"), grid = css("--grid"), pos = css("--pos"), vel = css("--vel"), acc = css("--acc"), hl2 = css("--hl2"), ghost = css("--ghost");
+  // grid
+  const xr = (w-pl-pr)/s, yr = (h-pt-pb)/s; const st = niceStep(Math.max(xr, yr), 8);
+  c.strokeStyle = grid; c.lineWidth = 1; c.font = `11px ${css("--f-num")}`; c.fillStyle = ink3;
+  for(let gx = Math.ceil(b.xmin/st)*st; gx <= b.xmin + xr; gx += st){ c.beginPath(); c.moveTo(X(gx), pt); c.lineTo(X(gx), h-pb); c.stroke(); c.textAlign="center"; c.fillText(f(gx, st < 1 ? 1 : 0), X(gx), h-pb+14); }
+  for(let gy = Math.ceil(b.ymin/st)*st; gy <= b.ymin + yr; gy += st){ c.beginPath(); c.moveTo(pl, Y(gy)); c.lineTo(w-pr, Y(gy)); c.stroke(); c.textAlign="right"; c.fillText(f(gy, st < 1 ? 1 : 0), pl-4, Y(gy)+4); }
+  label(c, "x〔m〕", w-pr-2, h-pb-10, ink3, "right", `12px ${css("--f-ui")}`);
+  label(c, "y〔m〕", pl+4, pt+8, ink3, "left", `12px ${css("--f-ui")}`);
+  // ground / cliff / slope
+  c.fillStyle = css("--ground"); c.globalAlpha = 0.45;
+  if(P.mode === "slope"){
+    const xe = b.xmax; c.beginPath(); c.moveTo(X(b.xmin), Y(0)); c.lineTo(X(0), Y(0)); c.lineTo(X(xe), Y(-xe*Math.tan(rad(P.al)))); c.lineTo(X(xe), h-pb); c.lineTo(X(b.xmin), h-pb); c.closePath(); c.fill();
+  } else {
+    c.fillRect(X(b.xmin), Y(0), w, 6);
+    if(P.h > 0) c.fillRect(X(b.xmin), Y(P.h), X(0)-X(b.xmin), Y(0)-Y(P.h));
+  }
+  c.globalAlpha = 1;
+  if(P.mode === "slope"){ c.strokeStyle = ink2; c.lineWidth = 1.5; c.beginPath(); c.moveTo(X(0),Y(0)); c.lineTo(X(b.xmax), Y(-b.xmax*Math.tan(rad(P.al)))); c.stroke();
+    label(c, `${P.al}°`, X(0)+34, Y(0)+10, ink2); c.strokeStyle = ink3; c.setLineDash([3,3]); c.beginPath(); c.moveTo(X(0),Y(0)); c.lineTo(X(0)+60, Y(0)); c.stroke(); c.setLineDash([]); }
+  else { c.strokeStyle = ink2; c.lineWidth = 1.5; c.beginPath(); c.moveTo(X(b.xmin), Y(0)); c.lineTo(w, Y(0)); c.stroke(); }
+
+  // other trajectories (range mode)
+  if(P.mode === "range"){
+    for(const th of [15,30,45,60,75]){
+      if(th === P.th) continue;
+      const Tt = flightT(th); c.strokeStyle = ghost; c.lineWidth = 1.4; c.setLineDash([5,4]); c.beginPath();
+      for(let i = 0; i <= 80; i++){ const q = state(Tt*i/80, th); i ? c.lineTo(X(q.x), Y(q.y)) : c.moveTo(X(q.x), Y(q.y)); }
+      c.stroke(); c.setLineDash([]);
+      const e = state(Tt, th); label(c, `${th}°`, X(e.x), Y(e.y)-10, ink3, "center", `12px ${css("--f-num")}`);
+    }
+  }
+  // trajectory ghost
+  c.strokeStyle = pos; c.globalAlpha = 0.35; c.lineWidth = 2; c.setLineDash([6,5]); c.beginPath();
+  for(let i = 0; i <= 120; i++){ const q = state(T*i/120, P.th); i ? c.lineTo(X(q.x), Y(q.y)) : c.moveTo(X(q.x), Y(q.y)); }
+  c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
+  // traveled path
+  c.strokeStyle = pos; c.lineWidth = 2.4; c.beginPath();
+  for(let i = 0; i <= 120; i++){ const tt = t*i/120; const q = state(tt, P.th); i ? c.lineTo(X(q.x), Y(q.y)) : c.moveTo(X(q.x), Y(q.y)); }
+  c.stroke();
+  // apex marker
+  const L0 = launch(P.th);
+  if(P.mode !== "slope" && L0.vy > 0){
+    const ta = L0.vy/P.g, a = state(ta, P.th);
+    c.strokeStyle = ink3; c.setLineDash([2,3]); c.lineWidth = 1; c.beginPath(); c.moveTo(X(a.x), Y(a.y)); c.lineTo(X(a.x), Y(0)); c.stroke(); c.setLineDash([]);
+    label(c, "最高点", X(a.x), Y(a.y)-12, ink3, "center", `12px ${css("--f-ui")}`);
+  }
+  // strobe
+  const kv = 0.2*Math.min(w, h)/Math.max(P.v0, Math.hypot(state(T,P.th).vx, state(T,P.th).vy), 1);
+  if(SHOW.strobe && T > 0){
+    const dt = strobeDt();
+    for(let k = 0; k*dt <= t + 1e-9; k++){
+      const q = state(k*dt, P.th);
+      c.fillStyle = pos; c.globalAlpha = 0.55; c.beginPath(); c.arc(X(q.x), Y(q.y), 4, 0, 7); c.fill(); c.globalAlpha = 1;
+      if(SHOW.vel) arrow(c, X(q.x), Y(q.y), X(q.x)+q.vx*kv, Y(q.y)-q.vy*kv, vel, 1.3);
+    }
+  }
+  // slope: distance from slope and farthest point
+  const q = state(t, P.th);
+  if(P.mode === "slope"){
+    const al = rad(P.al), nx = Math.sin(al), ny = Math.cos(al);   // unit normal (outward, up-right)
+    const dist = q.x*nx + q.y*ny;                                    // signed distance from slope line
+    const fx = q.x - dist*nx, fy = q.y - dist*ny;
+    c.strokeStyle = hl2; c.lineWidth = 2; c.setLineDash([4,3]); c.beginPath(); c.moveTo(X(q.x),Y(q.y)); c.lineTo(X(fx),Y(fy)); c.stroke(); c.setLineDash([]);
+    const tf = P.v0*Math.tan(al)/P.g, F = state(tf);
+    c.strokeStyle = hl2; c.lineWidth = 1.5; c.beginPath(); c.arc(X(F.x), Y(F.y), 7, 0, 7); c.stroke();
+    label(c, "最も離れる点", X(F.x)+10, Y(F.y)-12, hl2, "left", `12px ${css("--f-ui")}`);
+    if(SHOW.axes){
+      const ox = X(0), oy = Y(0), Ls = 70;
+      arrow(c, ox, oy, ox + Ls*Math.cos(al), oy + Ls*Math.sin(al), ink2, 1.6); label(c, "斜面に平行", ox + Ls*Math.cos(al) + 4, oy + Ls*Math.sin(al) + 12, ink2);
+      arrow(c, ox, oy, ox + Ls*Math.sin(al), oy - Ls*Math.cos(al), ink2, 1.6); label(c, "斜面に垂直", ox + Ls*Math.sin(al) + 6, oy - Ls*Math.cos(al), ink2);
+      const ga = 46, bx = X(q.x), by = Y(q.y);
+      arrow(c, bx, by, bx + ga*Math.sin(al)*Math.cos(al), by + ga*Math.sin(al)*Math.sin(al), acc, 1.6, [4,3]);
+      arrow(c, bx, by, bx - ga*Math.cos(al)*Math.sin(al), by + ga*Math.cos(al)*Math.cos(al), acc, 1.6, [4,3]);
+      label(c, "g sin α", bx + ga*Math.sin(al)*Math.cos(al) + 4, by + ga*Math.sin(al)*Math.sin(al) + 8, acc, "left", symFont(13));
+      label(c, "g cos α", bx - ga*Math.cos(al)*Math.sin(al) - 4, by + ga*Math.cos(al)*Math.cos(al) + 10, acc, "right", symFont(13));
+    }
+  }
+  // ball and vectors
+  const bx = X(q.x), by = Y(q.y);
+  if(SHOW.comp && SHOW.vel){
+    arrow(c, bx, by, bx + q.vx*kv, by, vel, 1.6, [4,3]); arrow(c, bx, by, bx, by - q.vy*kv, vel, 1.6, [4,3]);
+    label(c, "vx", bx + q.vx*kv + 4, by + 10, vel, "left", symFont(13)); if(Math.abs(q.vy) > 0.05*P.v0) label(c, "vy", bx + 5, by - q.vy*kv/2, vel, "left", symFont(13));
+  }
+  if(SHOW.vel){ arrow(c, bx, by, bx + q.vx*kv, by - q.vy*kv, vel, 3); label(c, "v", bx + q.vx*kv + 6, by - q.vy*kv - 6, vel, "left", `bold ${symFont(15)}`); }
+  if(SHOW.acc){ arrow(c, bx - 14, by, bx - 14, by + 40, acc, 2.6); label(c, "a", bx - 20, by + 34, acc, "right", `bold ${symFont(15)}`); }
+  c.fillStyle = pos; c.beginPath(); c.arc(bx, by, 6.5, 0, 7); c.fill();
+  c.strokeStyle = css("--surface"); c.lineWidth = 1.5; c.stroke();
+  if(T === 0) label(c, "この条件では地面より上を飛べません（θ か h を変えよう）", w/2, pt+16, css("--neg") || "#c4285a", "center");
+}
+
+/* ---------- aux: hodograph or R-θ ---------- */
+function drawAux(){
+  const {c, w, h} = prep($("aux"));
+  const ink2 = css("--ink2"), ink3 = css("--ink3"), vel = css("--vel"), acc = css("--acc"), grid = css("--grid"), pos = css("--pos");
+  if(P.mode === "range"){
+    $("hAux").textContent = "投げる角度と到達距離";
+    const pl = 40, pr = 12, pt = 14, pb = 28;
+    const Rs = []; let Rmax = 0, thMax = 0;
+    for(let th = 0; th <= 90; th += 0.5){ const Tt = flightT(th), R = launch(th).vx*Tt; Rs.push([th, R]); if(R > Rmax){ Rmax = R; thMax = th; } }
+    const top = Math.max(Rmax*1.12, 1);
+    const X = a => pl + a/90*(w-pl-pr), Y = r => h - pb - r/top*(h-pt-pb);
+    c.strokeStyle = grid; c.lineWidth = 1; c.font = `11px ${css("--f-num")}`; c.fillStyle = ink3;
+    for(let a = 0; a <= 90; a += 15){ c.beginPath(); c.moveTo(X(a), pt); c.lineTo(X(a), h-pb); c.stroke(); c.textAlign = "center"; c.fillText(a+"°", X(a), h-pb+14); }
+    const st = niceStep(top, 4);
+    for(let r = 0; r <= top; r += st){ c.beginPath(); c.moveTo(pl, Y(r)); c.lineTo(w-pr, Y(r)); c.stroke(); c.textAlign = "right"; c.fillText(f(r, st < 1 ? 1 : 0), pl-4, Y(r)+4); }
+    label(c, "到達距離〔m〕", pl+4, pt+4, ink3, "left", `12px ${css("--f-ui")}`);
+    label(c, "θ", w-pr, h-pb-10, ink3, "right", symFont(14));
+    c.strokeStyle = pos; c.lineWidth = 2.4; c.beginPath(); Rs.forEach((p,i) => i ? c.lineTo(X(p[0]), Y(p[1])) : c.moveTo(X(p[0]), Y(p[1]))); c.stroke();
+    c.strokeStyle = acc; c.setLineDash([3,3]); c.beginPath(); c.moveTo(X(thMax), Y(Rmax)); c.lineTo(X(thMax), h-pb); c.stroke(); c.setLineDash([]);
+    label(c, `最大 ${f(thMax,1)}°`, X(thMax)+4, Y(Rmax)-8, acc, thMax > 60 ? "right" : "left");
+    const Rc = launch(P.th).vx*T; if(P.th >= 0){ c.fillStyle = vel; c.beginPath(); c.arc(X(P.th), Y(Rc), 5.5, 0, 7); c.fill(); }
+    $("auxNote").innerHTML = `点：いまの角度 ${P.th}°（${f(Rc,1)} m）。${P.h > 0 ? "高い所から投げると、最大になる角度は 45° より小さくなる。" : "同じ高さに落ちるとき、45° で最大。45° から同じだけずれた角度（30° と 60° など）は同じ距離。"}`;
+    return;
+  }
+  $("hAux").textContent = "速度を1点から並べる";
+  const dt = strobeDt();
+  const vs = []; for(let k = 0; k*dt <= T + 1e-9; k++) vs.push(state(k*dt, P.th));
+  const end = state(T, P.th), L0 = state(0, P.th);
+  const vxmax = Math.max(L0.vx, 0.1), vymin = Math.min(end.vy, L0.vy, 0), vymax = Math.max(L0.vy, 0);
+  const pl = 30, pr = 50, pt = 12, pb = 12;
+  const s = Math.min((w-pl-pr)/vxmax, (h-pt-pb)/Math.max(vymax - vymin, 0.1));
+  const ox = pl, oy = pt + vymax*s;
+  c.strokeStyle = grid; c.beginPath(); c.moveTo(ox, pt); c.lineTo(ox, h-pb); c.moveTo(ox-10, oy); c.lineTo(w-pr+10, oy); c.stroke();
+  label(c, "O", ox-12, oy, ink2);
+  c.strokeStyle = ink3; c.setLineDash([3,3]); c.beginPath(); c.moveTo(ox + L0.vx*s, pt); c.lineTo(ox + L0.vx*s, h-pb); c.stroke(); c.setLineDash([]);
+  let shown = 0;
+  vs.forEach((q, k) => { if(k*dt > t + 1e-9) return; shown = k; arrow(c, ox, oy, ox + q.vx*s, oy - q.vy*s, vel, 1.4); });
+  const q = state(t, P.th); arrow(c, ox, oy, ox + q.vx*s, oy - q.vy*s, vel, 3);
+  if(shown >= 1){
+    const a = vs[shown-1], b2 = vs[shown];
+    arrow(c, ox + a.vx*s + 8, oy - a.vy*s, ox + b2.vx*s + 8, oy - b2.vy*s, acc, 2.4);
+    label(c, "Δv", ox + a.vx*s + 14, oy - (a.vy + b2.vy)/2*s, acc, "left", `bold ${symFont(14)}`);
+  }
+  $("auxNote").innerHTML = `ストロボの間隔 Δ${S("t")} ＝ ${dt} s ごとの速度を、点 O から並べた。先端は鉛直な一直線上に並び、Δ${V("v")} ＝ ${V("a")}Δ${S("t")} は鉛直下向きで大きさ ${S("g")}Δ${S("t")} ＝ ${f(P.g*dt,2)} m/s。`;
+}
+
+/* ---------- graphs ---------- */
+function graphSpecs(){
+  if(P.mode === "slope"){
+    const al = rad(P.al);
+    return [
+      {t:"斜面からの距離 d", u:"m", fn:tt => P.v0*Math.sin(al)*tt - 0.5*P.g*Math.cos(al)*tt*tt, tan:true, d:"d"},
+      {t:"斜面に沿った距離 s", u:"m", fn:tt => P.v0*Math.cos(al)*tt + 0.5*P.g*Math.sin(al)*tt*tt, tan:true, d:"s"},
+      {t:"vx", u:"m/s", fn:tt => state(tt).vx, area:true},
+      {t:"vy", u:"m/s", fn:tt => state(tt).vy, area:true}
+    ];
+  }
+  return [
+    {t:"x", u:"m", fn:tt => state(tt, P.th).x, tan:true},
+    {t:"y", u:"m", fn:tt => state(tt, P.th).y, tan:true},
+    {t:"vx", u:"m/s", fn:tt => state(tt, P.th).vx, area:true},
+    {t:"vy", u:"m/s", fn:tt => state(tt, P.th).vy, area:true}
+  ];
+}
+function drawGraph(cv, sp){
+  const {c, w, h} = prep(cv);
+  const ink2 = css("--ink2"), ink3 = css("--ink3"), grid = css("--grid2"), pos = css("--pos"), vel = css("--vel"), hl2 = css("--hl2");
+  const col = sp.u === "m" ? pos : vel;
+  const Tm = Math.max(T, 0.01);
+  let lo = 0, hi = 0; for(let i = 0; i <= 60; i++){ const v = sp.fn(Tm*i/60); lo = Math.min(lo, v); hi = Math.max(hi, v); }
+  if(hi - lo < 1e-6){ hi += 1; lo -= 1; }
+  const pad = (hi-lo)*0.1; hi += pad; lo -= (lo < 0 ? pad : 0);
+  const pl = 8, pr = 8, pt = 22, pb = 16;
+  const X = tt => pl + tt/Tm*(w-pl-pr), Y = v => h - pb - (v-lo)/(hi-lo)*(h-pt-pb);
+  c.strokeStyle = grid; c.lineWidth = 1; c.beginPath(); c.moveTo(pl, Y(0)); c.lineTo(w-pr, Y(0)); c.moveTo(pl, pt); c.lineTo(pl, h-pb); c.stroke();
+  const name = sp.t.replace(/^(vx|vy|x|y)$/, m => m);
+  const nm = {x:"x", y:"y", vx:"vx", vy:"vy"}[sp.t];
+  c.font = `12px ${css("--f-ui")}`; c.fillStyle = ink2; c.textBaseline = "middle"; c.textAlign = "left";
+  c.fillText(`${nm ? nm : sp.t}-t〔${sp.u}〕`, pl+4, 10);
+  // area
+  if(sp.area && SHOW.tan && t > 0){
+    c.beginPath(); c.moveTo(X(0), Y(0));
+    for(let i = 0; i <= 60; i++){ const tt = t*i/60; c.lineTo(X(tt), Y(sp.fn(tt))); }
+    c.lineTo(X(t), Y(0)); c.closePath(); c.fillStyle = css("--hl2-a"); c.fill();
+  }
+  // ghost & curve
+  c.strokeStyle = col; c.globalAlpha = 0.3; c.lineWidth = 1.5; c.beginPath();
+  for(let i = 0; i <= 80; i++){ const tt = Tm*i/80; i ? c.lineTo(X(tt), Y(sp.fn(tt))) : c.moveTo(X(tt), Y(sp.fn(tt))); } c.stroke(); c.globalAlpha = 1;
+  c.lineWidth = 2.2; c.beginPath();
+  for(let i = 0; i <= 80; i++){ const tt = t*i/80; i ? c.lineTo(X(tt), Y(sp.fn(tt))) : c.moveTo(X(tt), Y(sp.fn(tt))); } c.stroke();
+  const v = sp.fn(t);
+  // tangent
+  let extra = "";
+  if(sp.tan && SHOW.tan){
+    const e = Math.max(Tm*1e-4, 1e-5), sl = (sp.fn(Math.min(t+e,Tm)) - sp.fn(Math.max(t-e,0)))/(Math.min(t+e,Tm) - Math.max(t-e,0));
+    const dtv = Tm*0.18; c.strokeStyle = hl2; c.lineWidth = 1.6;
+    c.beginPath(); c.moveTo(X(t-dtv), Y(v - sl*dtv)); c.lineTo(X(t+dtv), Y(v + sl*dtv)); c.stroke();
+    extra = `傾き ${f(sl,1)}`;
+  }
+  if(sp.area && SHOW.tan){
+    let A = 0; const n = 200; for(let i = 0; i < n; i++){ const a = t*i/n, b = t*(i+1)/n; A += (sp.fn(a)+sp.fn(b))/2*(b-a); }
+    extra = `面積 ${f(A,1)}`;
+  }
+  c.fillStyle = col; c.beginPath(); c.arc(X(t), Y(v), 4, 0, 7); c.fill();
+  c.font = `11px ${css("--f-num")}`; c.textBaseline = "alphabetic"; c.textAlign = "left"; c.fillStyle = ink2; c.fillText(`値 ${f(v,1)}`, pl+4, h-4);
+  if(extra){ c.fillStyle = hl2; c.textAlign = "right"; c.fillText(extra, w-pr, h-4); }
+}
+function drawGraphs(){ const sp = graphSpecs(); sp.forEach((g,i) => drawGraph($("g"+i), g)); }
+
+/* ---------- readout ---------- */
+function readout(){
+  const q = state(t, P.th), sp = Math.hypot(q.vx, q.vy);
+  let rows = [[`時刻 ${S("t")}`, `${f(t)} s`], [`位置 (${S("x")}, ${S("y")})`, `(${f(q.x,1)}, ${f(q.y,1)}) m`], [`速度 (${S("v")}<sub>x</sub>, ${S("v")}<sub>y</sub>)`, `(${f(q.vx,1)}, ${f(q.vy,1)}) m/s`], [`速さ ${S("v")}`, `${f(sp,1)} m/s`], [`加速度 ${V("a")}`, `(0, −${P.g}) m/s²`]];
+  let eqs = "";
+  if(P.mode === "slope"){
+    const al = rad(P.al), tf = P.v0*Math.tan(al)/P.g, dmax = Math.pow(P.v0*Math.sin(al),2)/(2*P.g*Math.cos(al));
+    rows = rows.concat([[`斜面に落ちる時刻`, `${f(T)} s`], [`斜面に沿った距離`, `${f(P.v0*T/Math.cos(al),1)} m`], [`最も離れる時刻`, `${f(tf)} s`], [`斜面からの最大距離`, `${f(dmax,2)} m`]]);
+    eqs = `<p class="eq"><span class="tag n">微積なし</span>落ちる点：${d2("½"+S("g")+S("t")+"²", S("v")+"<sub>0</sub>"+S("t"))} ＝ tan ${S("α")} → ${S("t")} ＝ 2${S("v")}<sub>0</sub> tan ${S("α")}/${S("g")} ＝ <b>${f(T)} s</b></p>
+    <p class="eq"><span class="tag n">微積なし</span>最も離れる：速度が斜面と平行 ${S("g")}${S("t")}/${S("v")}<sub>0</sub> ＝ tan ${S("α")} → ${S("t")} ＝ <b>${f(tf)} s</b>（落ちる時刻の半分）</p>
+    <p class="eq"><span class="tag c">微積</span>斜面に垂直な距離 ${S("d")} ＝ (${S("v")}<sub>0</sub> sin ${S("α")})${S("t")} − ½(${S("g")} cos ${S("α")})${S("t")}²、d${S("d")}/d${S("t")} ＝ 0 → 同じ時刻</p>`;
+  } else {
+    const L = launch(P.th), R = L.vx*T;
+    rows.push([`着地の時刻`, `${f(T)} s`], [`水平到達距離`, `${f(R,1)} m`]);
+    if(L.vy > 0) rows.push([`最高点（時刻・地面からの高さ）`, `${f(L.vy/P.g)} s・${f(P.h + L.vy*L.vy/(2*P.g),1)} m`]);
+    rows.push([`着地の速さ`, `${f(Math.hypot(state(T,P.th).vx, state(T,P.th).vy),1)} m/s`]);
+    const c0 = f(L.vx,2), s0 = f(L.vy,2);
+    eqs = `<p class="eq">${S("v")}<sub>x</sub> ＝ ${S("v")}<sub>0</sub> cos ${S("θ")} ＝ <b>${c0}</b>　${S("v")}<sub>y</sub> ＝ ${S("v")}<sub>0</sub> sin ${S("θ")} − ${S("g")}${S("t")} ＝ <b>${s0} − ${P.g}${S("t")}</b></p>
+    <p class="eq">${S("x")} ＝ <b>${c0}${S("t")}</b>　${S("y")} ＝ ${P.h ? `<b>${f(P.h,1)}</b> ＋ ` : ""}<b>${s0}${S("t")} − ${f(P.g/2,2)}${S("t")}²</b></p>
+    ${Math.abs(L.vx) > 1e-6 ? `<p class="eq">軌道：${S("y")} ＝ ${P.h ? f(P.h,1)+" ＋ " : ""}${f(Math.tan(rad(P.th)),3)}${S("x")} − ${f(P.g/(2*L.vx*L.vx),4)}${S("x")}²</p>` : ""}
+    <p class="eq"><span class="tag c">微積</span>${S("a")}<sub>y</sub> ＝ −${S("g")} を ${S("t")} で積分 → ${S("v")}<sub>y</sub>、もう一度積分 → ${S("y")}（積分定数は ${S("t")} ＝ 0 の値）</p>`;
+  }
+  $("ro").innerHTML = `<table class="ro">${rows.map(r => `<tr><td>${r[0]}</td><td class="num">${r[1]}</td></tr>`).join("")}</table>`;
+  $("eqs").innerHTML = eqs;
+}
+function d2(a, b){ return `<span style="display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:.9em;line-height:1.1"><span style="border-bottom:1px solid currentColor">${a}</span><span>${b}</span></span>`; }
+
+const ASKS = {
+  proj:[
+    ["右上の図で、速度ベクトルの先端はどのように並ぶか。Δ" + V("v") + " の向きと大きさは？", "鉛直な一直線上に等間隔。Δ" + V("v") + " は鉛直下向きで大きさ " + S("g") + "Δ" + S("t") + "。水平成分は変わらない。"],
+    ["最高点で、速度と加速度はそれぞれどうなっているか。", "速度は水平成分 " + S("v") + "<sub>0</sub> cos " + S("θ") + " だけが残る（0 ではない）。加速度は (0, −" + S("g") + ") のまま。"],
+    [S("y") + "-" + S("t") + " グラフの接線の傾き、" + S("v") + "<sub>y</sub>-" + S("t") + " グラフの面積は、それぞれ何を表すか。", "傾き ＝ " + S("v") + "<sub>y</sub>（d" + S("y") + "/d" + S("t") + "）、面積 ＝ 変位 Δ" + S("y") + "（∫" + S("v") + "<sub>y</sub>d" + S("t") + "）。数値を見比べよう。"],
+    ["θ ＝ 0°（水平投射）にして、高さ " + S("h") + " を変えると、着地までの時間は初速度によって変わるか。", "変わらない。時間は " + S("h") + " と " + S("g") + " だけで決まる（√(2" + S("h") + "/" + S("g") + ")）。"]
+  ],
+  range:[
+    [S("h") + " ＝ 0 で、到達距離が最大になる角度は何度か。30° と 60° の到達距離を比べよう。", "45°。30° と 60° は同じ距離（sin 60° ＝ sin 120°）。"],
+    ["高さ " + S("h") + " を大きくしていくと、最大になる角度はどう変わるか。", "45° より小さくなる。落下の時間を高さがかせぐので、水平成分を大きくするほうが得。"],
+    ["重力加速度を月（1.6 m/s²）にすると、到達距離は地球の何倍になるか。", "到達距離は 1/" + S("g") + " に比例するので 9.8 ÷ 1.6 ≒ 6.1 倍（" + S("h") + " ＝ 0 のとき）。"]
+  ],
+  slope:[
+    ["「斜面から最も離れる時刻」と「斜面に落ちる時刻」を比べよう。", "ちょうど半分。斜面に垂直な方向の運動は、投げ上げと同じ形になる。"],
+    ["最も離れたとき、速度ベクトルはどちらを向いているか。", "斜面と平行。斜面に垂直な成分が 0 になる。"],
+    ["「斜面に沿った軸」をオンにして、重力加速度を分けよう。斜面に垂直な方向の運動は何に似ているか。", "初速度 " + S("v") + "<sub>0</sub> sin " + S("α") + "、加速度 −" + S("g") + " cos " + S("α") + " の鉛直投げ上げと同じ形。"]
+  ]
+};
+function renderAsks(){
+  $("asks").innerHTML = ASKS[P.mode].map(a => `<li>${a[0]} <details><summary>答え</summary> ${a[1]}</details></li>`).join("");
+}
+
+/* ---------- UI ---------- */
+function syncUI(){
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.mode === P.mode));
+  $("v0").value = P.v0; $("th").value = P.th; $("h").value = P.h; $("al").value = P.al;
+  $("v0v").textContent = `${f(P.v0,1)} m/s`; $("thv").textContent = `${P.th}°`; $("hv").textContent = `${f(P.h,1)} m`; $("alv").textContent = `${P.al}°`;
+  $("gsel").value = String(P.g);
+  const sl = P.mode === "slope";
+  $("cTh").hidden = sl; $("cH").hidden = sl; $("cAl").hidden = !sl; $("lbAxes").hidden = !sl; $("lgSlope").hidden = !sl;
+  $("v0").max = sl ? 20 : 40;
+}
+function draw(){
+  drawStage(); drawAux(); drawGraphs(); readout();
+  $("tLabel").textContent = `t = ${f(t)} s`;
+  $("tSlider").value = T > 0 ? Math.round(t/T*1000) : 0;
+  $("play").textContent = playing ? "❚❚ 停止" : (t >= T && T > 0 ? "▶ もう一度" : "▶ 再生");
+}
+function setHash(){ const p = P.mode === "slope" ? `&v0=${P.v0}&al=${P.al}` : `&v0=${P.v0}&th=${P.th}&h=${P.h}`; try{ history.replaceState(null, "", `#${P.mode}${p}${P.g !== 9.8 ? "&g="+P.g : ""}`); }catch(e){} }
+function changed(keepT){ recompute(); if(!keepT){ t = 0; playing = true; last = null; } syncUI(); setHash(); draw(); }
+
+function readHash(){
+  const parts = location.hash.replace(/^#/, "").split("&");
+  const m = parts[0]; if(["proj","range","slope"].includes(m)) P.mode = m;
+  const def = {proj:{v0:19.6, th:45, h:0}, range:{v0:19.6, th:45, h:0}, slope:{v0:9.8, al:30}}[P.mode];
+  Object.assign(P, def, {g:9.8});
+  parts.slice(1).forEach(kv => { const [k, v] = kv.split("="); const n = parseFloat(v); if(!isNaN(n) && ["v0","th","h","al","g"].includes(k)) P[k] = n; });
+}
+
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => {
+  P.mode = b.dataset.mode;
+  if(P.mode === "slope"){ P.v0 = Math.min(P.v0, 20); }
+  renderAsks(); changed();
+}));
+$("v0").addEventListener("input", e => { P.v0 = +e.target.value; changed(); });
+$("th").addEventListener("input", e => { P.th = +e.target.value; changed(); });
+$("h").addEventListener("input", e => { P.h = +e.target.value; changed(); });
+$("al").addEventListener("input", e => { P.al = +e.target.value; changed(); });
+$("gsel").addEventListener("change", e => { P.g = +e.target.value; changed(); });
+[["tgVel","vel"],["tgComp","comp"],["tgAcc","acc"],["tgStrobe","strobe"],["tgTan","tan"],["tgAxes","axes"]].forEach(([id,k]) => $(id).addEventListener("change", e => { SHOW[k] = e.target.checked; draw(); }));
+$("play").addEventListener("click", () => { if(playing){ playing = false; } else { if(t >= T) t = 0; playing = true; last = null; } draw(); });
+$("reset").addEventListener("click", () => { t = 0; playing = false; draw(); });
+$("tSlider").addEventListener("input", e => { playing = false; t = T*(+e.target.value)/1000; draw(); });
+$("speed").addEventListener("change", e => { speed = +e.target.value; });
+window.addEventListener("hashchange", () => { readHash(); renderAsks(); changed(); });
+window.addEventListener("resize", draw);
+if(window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", draw);
+
+function loop(ts){
+  if(playing){
+    if(last != null){ t += Math.min((ts - last)/1000, 0.05)*speed; if(t >= T){ t = T; playing = false; } draw(); }
+    last = ts;
+  } else last = null;
+  requestAnimationFrame(loop);
+}
+readHash(); renderAsks(); recompute(); syncUI(); playing = true; draw();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
