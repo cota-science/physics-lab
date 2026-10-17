@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>単振動ラボ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDGothic&family=BIZ+UDPGothic:wght@400;700&display=swap">
+<link rel="stylesheet" href="lab.css">
+<script src="lab-common.js"></script>
+</head>
+<body>
+<script>
+(function(){
+"use strict";
+const {f, S, V, css, prep, arrow, label, symFont, uiFont, numFont, fit, disc, table, graph} = LAB;
+const G = 9.8, PI2 = Math.PI*2;
+
+function spring(c, x1, y1, x2, y2, coils, amp, color){
+  const L = Math.hypot(x2-x1, y2-y1), ux = (x2-x1)/L, uy = (y2-y1)/L, nx = -uy, ny = ux, lead = Math.min(10, L*0.1);
+  c.strokeStyle = color; c.lineWidth = 1.8; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x1 + ux*lead, y1 + uy*lead);
+  const n = coils*2;
+  for(let i = 1; i < n; i++){ const s = lead + (L - 2*lead)*i/n, sgn = i % 2 ? 1 : -1; c.lineTo(x1 + ux*s + nx*amp*sgn, y1 + uy*s + ny*amp*sgn); }
+  c.lineTo(x2 - ux*lead, y2 - uy*lead); c.lineTo(x2, y2); c.stroke();
+}
+
+/* ---------- 円運動の影 ---------- */
+const circle = {
+  label:"円運動の影と x-t グラフ",
+  params:[["A","振幅（円の半径）"+S("A"),0.5,2,0.05,"m",2,1],["w","角振動数（角速度）"+S("ω"),0.5,4,0.1,"rad/s",1,2]],
+  toggles:[["vec","速度・加速度の影",true]],
+  timed:true, graphs:2, aspect:"16/7",
+  legend:`<span><i style="background:var(--ink3)"></i>等速円運動</span><span><i style="background:var(--pos)"></i>影（単振動）</span><span><i style="background:var(--vel)"></i>速度</span><span><i style="background:var(--acc)"></i>加速度</span>`,
+  reset(){}, duration(P){ return 2*PI2/P.w; }, step(){},
+  draw(ctx){
+    const {P, t, T} = ctx; const {c, w, h} = prep(ctx.stage);
+    const D = ctx.dur, tw = 6.0;   // 横軸：時間 D を幅 tw の区間に
+    const tf = fit(w, h, {x0:-2.25, x1:3.2 + tw, y0:-2.25, y1:2.25}, 8);
+    const ink2 = css("--ink2"), ink3 = css("--ink3"), pos = css("--pos"), vel = css("--vel"), acc = css("--acc");
+    const ph = P.w*t, cx = Math.cos(ph)*P.A, cy = Math.sin(ph)*P.A, ax0 = 2.6;
+    c.strokeStyle = ink3; c.setLineDash([5,4]); c.beginPath(); c.arc(tf.X(0), tf.Y(0), P.A*tf.s, 0, PI2); c.stroke(); c.setLineDash([]);
+    c.strokeStyle = ink3; c.beginPath(); c.moveTo(tf.X(0), tf.Y(0)); c.lineTo(tf.X(cx), tf.Y(cy)); c.stroke();
+    disc(c, tf.X(cx), tf.Y(cy), 7, ink3);
+    // projection line and axis
+    c.strokeStyle = ink3; c.lineWidth = 1; c.setLineDash([2,3]); c.beginPath(); c.moveTo(tf.X(cx), tf.Y(cy)); c.lineTo(tf.X(ax0), tf.Y(cy)); c.stroke(); c.setLineDash([]);
+    c.strokeStyle = ink2; c.beginPath(); c.moveTo(tf.X(ax0), tf.Y(-2.2)); c.lineTo(tf.X(ax0), tf.Y(2.2)); c.moveTo(tf.X(ax0), tf.Y(0)); c.lineTo(tf.X(ax0 + tw + 0.4), tf.Y(0)); c.stroke();
+    label(c, "x", tf.X(ax0) - 10, tf.Y(2.1), ink2, "right", symFont(14)); label(c, "t", tf.X(ax0 + tw + 0.4), tf.Y(0) + 12, ink2, "right", symFont(14));
+    // x-t trace
+    c.strokeStyle = pos; c.lineWidth = 2.2; c.beginPath();
+    for(let i = 0; i <= 200; i++){ const s = t*i/200; const X = tf.X(ax0 + s/D*tw), Y = tf.Y(P.A*Math.sin(P.w*s)); i ? c.lineTo(X, Y) : c.moveTo(X, Y); } c.stroke();
+    c.strokeStyle = pos; c.globalAlpha = 0.25; c.beginPath();
+    for(let i = 0; i <= 200; i++){ const s = D*i/200; const X = tf.X(ax0 + s/D*tw), Y = tf.Y(P.A*Math.sin(P.w*s)); i ? c.lineTo(X, Y) : c.moveTo(X, Y); } c.stroke(); c.globalAlpha = 1;
+    // shadow point & vectors
+    const sx = tf.X(ax0), sy = tf.Y(cy);
+    if(T.vec){
+      const vy = P.A*P.w*Math.cos(ph), ay = -P.A*P.w*P.w*Math.sin(ph), kv = 0.8/(P.A*P.w), ka = 0.8/(P.A*P.w*P.w);
+      arrow(c, tf.X(cx), tf.Y(cy), tf.X(cx - P.A*P.w*Math.sin(ph)*kv), tf.Y(cy + vy*kv), vel, 1.6, [4,3]);
+      arrow(c, tf.X(cx), tf.Y(cy), tf.X(cx - cx*P.w*P.w*ka), tf.Y(cy - cy*P.w*P.w*ka), acc, 1.6, [4,3]);
+      arrow(c, sx - 8, sy, sx - 8, sy - vy*kv*tf.s, vel, 2.8); arrow(c, sx + 8, sy, sx + 8, sy - ay*ka*tf.s, acc, 2.8);
+    }
+    disc(c, sx, sy, 8, pos);
+    ctx.banner(`x ＝ A sin ωt ＝ ${f(cy,2)} m　（円運動の点の y 座標と同じ）`, "--pos");
+    graph(ctx.graphs[0], {title:"v-t（x を微分）", unit:"m/s", tmax:D, t, series:[{fn:s => P.A*P.w*Math.cos(P.w*s), color:"--vel"}]});
+    graph(ctx.graphs[1], {title:"a-t（＝ −ω²x）", unit:"m/s²", tmax:D, t, series:[{fn:s => -P.A*P.w*P.w*Math.sin(P.w*s), color:"--acc"}]});
+    ctx.ro(table([[`周期 2π/${S("ω")}`, `${f(PI2/P.w,3)} s`], [`最大の速さ ${S("A")}${S("ω")}`, `${f(P.A*P.w,3)} m/s`], [`最大の加速度 ${S("A")}${S("ω")}²`, `${f(P.A*P.w*P.w,3)} m/s²`], [`いまの x・v・a`, `${f(cy,2)} m・${f(P.A*P.w*Math.cos(ph),2)} m/s・${f(-P.w*P.w*cy,2)} m/s²`]]));
+    ctx.eqs(`<p class="eq"><span class="tag n">微積なし</span>円運動の速度（接線）と加速度（中心向き）の影が、単振動の速度・加速度。</p><p class="eq"><span class="tag c">微積</span>${S("x")} ＝ ${S("A")} sin ${S("ω")}${S("t")} → ${S("v")} ＝ ${S("A")}${S("ω")} cos ${S("ω")}${S("t")} → ${S("a")} ＝ −${S("A")}${S("ω")}² sin ${S("ω")}${S("t")} ＝ −${S("ω")}²${S("x")}</p>`);
+  },
+  asks:[
+    ["影の点が中心を通るとき、速度と加速度の影はどうなっているか。", "速度は最大、加速度は 0。円運動の加速度が水平になり、縦の成分がないから。"],
+    ["影の点が端（最高点）にあるとき、速度と加速度の影は？", "速度は 0、加速度は最大で下向き（中心向き）。"],
+    ["x-t、v-t、a-t のグラフの山の位置を比べよう。", "v は x より 1/4 周期早く、a は x と上下逆（a ＝ −ω²x）。"]
+  ]
+};
+
+/* ---------- ばね振り子 ---------- */
+const springMode = {
+  label:"ばね振り子とエネルギー",
+  params:[["k","ばね定数 "+S("k"),5,100,1,"N/m",0,20],["m","質量 "+S("m"),0.1,2,0.05,"kg",2,0.2],["A","振幅 "+S("A"),0.02,0.2,0.005,"m",3,0.1]],
+  selects:[["dir","向き",[["h","水平"],["v","鉛直（つるす）"]],"h"]],
+  timed:true, graphs:4,
+  legend:`<span><i style="background:var(--pos)"></i>位置 ${S("x")}</span><span><i style="background:var(--vel)"></i>運動エネルギー</span><span><i style="background:var(--hl2)"></i>弾性エネルギー（中心から）</span><span><i style="background:var(--acc)"></i>和</span>`,
+  reset(){}, duration(P){ return 3*PI2*Math.sqrt(P.m/P.k); }, step(){},
+  draw(ctx){
+    const {P, t} = ctx; const {c, w, h} = prep(ctx.stage);
+    const om = Math.sqrt(P.k/P.m), x = P.A*Math.cos(om*t), v = -P.A*om*Math.sin(om*t), d0 = P.dir === "v" ? P.m*G/P.k : 0;
+    const ink2 = css("--ink2"), ink3 = css("--ink3"), pos = css("--pos"), vel = css("--vel"), hl2 = css("--hl2"), acc = css("--acc");
+    const L0 = 0.3;   // 自然の長さ（描画用）
+    if(P.dir === "h"){
+      const tf = fit(w, h, {x0:-0.05, x1:L0 + 0.25 + 0.15, y0:-0.12, y1:0.2});
+      c.fillStyle = css("--ground"); c.globalAlpha = 0.5; c.fillRect(tf.X(-0.05), tf.Y(0), w, 8); c.fillRect(tf.X(-0.05), tf.Y(0.2), tf.X(0) - tf.X(-0.05), tf.Y(0) - tf.Y(0.2)); c.globalAlpha = 1;
+      const bw = 0.06, bx = L0 + x;
+      spring(c, tf.X(0), tf.Y(0.03), tf.X(bx), tf.Y(0.03), 12, 7, ink2);
+      c.fillStyle = pos; c.fillRect(tf.X(bx), tf.Y(0.06), bw*tf.s, 0.06*tf.s);
+      [[L0, "中心（自然の長さ）"], [L0 + P.A, "+A"], [L0 - P.A, "−A"]].forEach(([xx, lab], i) => { c.strokeStyle = ink3; c.setLineDash([3,3]); c.beginPath(); c.moveTo(tf.X(xx), tf.Y(0.15)); c.lineTo(tf.X(xx), tf.Y(-0.02)); c.stroke(); c.setLineDash([]); label(c, lab, tf.X(xx), tf.Y(-0.06) + (i ? 0 : 14), ink3, "center", uiFont(11)); });
+      arrow(c, tf.X(bx + bw/2), tf.Y(0.1), tf.X(bx + bw/2 + v*0.15), tf.Y(0.1), vel, 2.4);
+    } else {
+      const tf = fit(w, h, {x0:-0.35, x1:0.35, y0:-(L0 + d0 + 0.25 + 0.08), y1:0.04});
+      c.fillStyle = css("--ground"); c.globalAlpha = 0.5; c.fillRect(tf.X(-0.2), tf.Y(0.04), 0.4*tf.s, 0.04*tf.s); c.globalAlpha = 1;
+      const by = -(L0 + d0 + x), bw = 0.06;
+      spring(c, tf.X(0), tf.Y(0), tf.X(0), tf.Y(by), 12, 7, ink2);
+      c.fillStyle = pos; c.fillRect(tf.X(-bw/2), tf.Y(by), bw*tf.s, bw*tf.s);
+      [[-L0, "自然の長さ"], [-(L0 + d0), "つり合い（中心）"], [-(L0 + d0 + P.A), "+A"], [-(L0 + d0 - P.A), "−A"]].forEach(([yy, lab]) => { c.strokeStyle = ink3; c.setLineDash([3,3]); c.beginPath(); c.moveTo(tf.X(-0.12), tf.Y(yy)); c.lineTo(tf.X(0.12), tf.Y(yy)); c.stroke(); c.setLineDash([]); label(c, lab, tf.X(0.14), tf.Y(yy), ink3, "left", uiFont(11)); });
+      arrow(c, tf.X(-0.09), tf.Y(by - bw/2), tf.X(-0.09), tf.Y(by - bw/2 - v*0.15), vel, 2.4);
+    }
+    const Kk = 0.5*P.m*v*v, U = 0.5*P.k*x*x, E = 0.5*P.k*P.A*P.A, D = ctx.dur;
+    ctx.banner(P.dir === "v" ? `つり合いの位置（自然の長さから ${f(d0,3)} m 下）が振動の中心。周期は水平と同じ` : "自然の長さの位置が振動の中心", "--ui");
+    graph(ctx.graphs[0], {title:"x-t", unit:"m", tmax:D, t, series:[{fn:s => P.A*Math.cos(om*s), color:"--pos"}]});
+    graph(ctx.graphs[1], {title:"v-t", unit:"m/s", tmax:D, t, series:[{fn:s => -P.A*om*Math.sin(om*s), color:"--vel"}]});
+    graph(ctx.graphs[2], {title:"a-t", unit:"m/s²", tmax:D, t, series:[{fn:s => -P.A*om*om*Math.cos(om*s), color:"--acc"}]});
+    graph(ctx.graphs[3], {title:"エネルギー", unit:"J", tmax:D, t, ylo:0, yhi:E*1.15, series:[{fn:s => 0.5*P.m*(P.A*om*Math.sin(om*s))**2, color:"--vel", name:"運動"}, {fn:s => 0.5*P.k*(P.A*Math.cos(om*s))**2, color:"--hl2", name:"弾性"}, {fn:() => E, color:"--acc", name:"和"}]});
+    ctx.ro(table([[`角振動数 √(${S("k")}/${S("m")})`, `${f(om,3)} rad/s`], [`周期 2π√(${S("m")}/${S("k")})`, `${f(PI2/om,3)} s`], [`最大の速さ ${S("A")}${S("ω")}`, `${f(P.A*om,3)} m/s`], [`最大の加速度 ${S("A")}${S("ω")}²`, `${f(P.A*om*om,3)} m/s²`],
+      [`運動 ＋ 弾性（いま）`, `${f(Kk,4)} ＋ ${f(U,4)} ＝ ${f(Kk + U,4)} J`], [`½${S("k")}${S("A")}²`, `${f(E,4)} J`]]));
+    ctx.eqs(`<p class="eq">${S("x")} ＝ ${f(P.A,3)} cos ${f(om,2)}${S("t")}（はなした位置を ＋${S("A")}、${S("t")} ＝ 0）</p>${P.dir === "v" ? `<p class="eq"><span class="tag c">微積</span>${S("m")}${S("x")}″ ＝ ${S("m")}${S("g")} − ${S("k")}(${S("d")} ＋ ${S("x")}) ＝ −${S("k")}${S("x")}（${S("k")}${S("d")} ＝ ${S("m")}${S("g")}）</p>` : ""}`);
+  },
+  asks:[
+    ["振幅を変えても周期は変わらないことを確かめよう。", "T ＝ 2π√(m/k) に振幅は入らない（等時性）。"],
+    ["質量を4倍にすると周期は何倍か。", "2倍（√4）。"],
+    ["エネルギーのグラフで、運動エネルギーと弾性エネルギーが等しくなるのはいつか。", "x ＝ ±A/√2 のとき。1周期に4回。"],
+    ["「鉛直」にしても周期が変わらないのはなぜか。", "重力はつり合いの位置をずらすだけで、そこからの変位 x に対する合力は −kx のままだから。"]
+  ]
+};
+
+/* ---------- 単振り子 ---------- */
+const pendulum = {
+  label:"単振り子（大きな振れ角）",
+  params:[["L","糸の長さ "+S("L"),0.2,2,0.05,"m",2,1],["th0","はじめの振れ角 "+S("θ")+"<sub>0</sub>",5,80,1,"°",0,10]],
+  toggles:[["ghost","単振動の近似（θ ≒ sin θ）の振り子も表示",true]],
+  timed:true, graphs:1, dt:1/2000,
+  legend:`<span><i style="background:var(--pos)"></i>実際の振り子</span><span><i style="background:var(--ink3)"></i>単振動の近似</span><span><i style="background:var(--acc)"></i>重力の接線成分（復元力）</span>`,
+  reset(P, St){ St.th = P.th0*Math.PI/180; St.om = 0; St.trace = [[0, P.th0]]; St.last = 0; St.cross = []; St.prev = St.th; },
+  duration(P){ return 3*PI2*Math.sqrt(P.L/G)*1.15; },
+  step(P, St, dt, t){
+    const fA = (th) => -G/P.L*Math.sin(th);
+    const k1t = St.om, k1o = fA(St.th), k2t = St.om + 0.5*dt*k1o, k2o = fA(St.th + 0.5*dt*k1t), k3t = St.om + 0.5*dt*k2o, k3o = fA(St.th + 0.5*dt*k2t), k4t = St.om + dt*k3o, k4o = fA(St.th + dt*k3t);
+    const prev = St.th;
+    St.th += dt/6*(k1t + 2*k2t + 2*k3t + k4t); St.om += dt/6*(k1o + 2*k2o + 2*k3o + k4o);
+    if(prev > 0 && St.th <= 0) St.cross.push(t + dt);
+    if(t + dt - St.last >= 0.01){ St.trace.push([t + dt, St.th*180/Math.PI]); St.last = t + dt; }
+  },
+  draw(ctx){
+    const {P, S:St, t, T} = ctx; const {c, w, h} = prep(ctx.stage);
+    const tf = fit(w, h, {x0:-1.1*P.L, x1:1.1*P.L, y0:-1.12*P.L, y1:0.08*P.L});
+    const ink2 = css("--ink2"), ink3 = css("--ink3"), pos = css("--pos"), acc = css("--acc");
+    const T0 = PI2*Math.sqrt(P.L/G), th0 = P.th0*Math.PI/180;
+    c.strokeStyle = ink2; c.lineWidth = 3; c.beginPath(); c.moveTo(tf.X(-0.2*P.L), tf.Y(0)); c.lineTo(tf.X(0.2*P.L), tf.Y(0)); c.stroke();
+    c.strokeStyle = ink3; c.lineWidth = 1; c.setLineDash([3,4]); c.beginPath(); c.moveTo(tf.X(0), tf.Y(0)); c.lineTo(tf.X(0), tf.Y(-1.08*P.L)); c.stroke();
+    c.beginPath(); c.arc(tf.X(0), tf.Y(0), P.L*tf.s, Math.PI/2 - th0, Math.PI/2 + th0); c.stroke(); c.setLineDash([]);
+    if(T.ghost){ const ga = th0*Math.cos(t*PI2/T0), gx = P.L*Math.sin(ga), gy = -P.L*Math.cos(ga);
+      c.strokeStyle = ink3; c.globalAlpha = 0.6; c.lineWidth = 1.2; c.beginPath(); c.moveTo(tf.X(0), tf.Y(0)); c.lineTo(tf.X(gx), tf.Y(gy)); c.stroke(); disc(c, tf.X(gx), tf.Y(gy), 8, null, ink3); c.globalAlpha = 1; }
+    const bx = P.L*Math.sin(St.th), by = -P.L*Math.cos(St.th);
+    c.strokeStyle = ink2; c.lineWidth = 1.6; c.beginPath(); c.moveTo(tf.X(0), tf.Y(0)); c.lineTo(tf.X(bx), tf.Y(by)); c.stroke();
+    const ft = -Math.sin(St.th), kk = 0.35*P.L*tf.s;   // 接線成分（単位 mg）
+    arrow(c, tf.X(bx), tf.Y(by), tf.X(bx) + ft*Math.cos(St.th)*kk, tf.Y(by) - ft*Math.sin(St.th)*kk, acc, 2.6);
+    disc(c, tf.X(bx), tf.Y(by), 9, pos);
+    const series = (P.th0*Math.PI/180)**2;
+    const Tex = T0*(1 + series/16 + 11*series*series/3072);
+    const meas = St.cross.length >= 2 ? St.cross[St.cross.length-1] - St.cross[St.cross.length-2] : null;
+    ctx.banner(P.th0 <= 15 ? "振れ角が小さいので、単振動の近似とほぼ同じ周期" : `振れ角が大きいと sin θ ＜ θ なので復元力が近似より弱く、周期が長くなる（近似より ${f((Tex/T0 - 1)*100,1)}% 長い）`, P.th0 <= 15 ? "--acc" : "--neg");
+    graph(ctx.graphs[0], {title:"θ-t（°）", unit:"", tmax:ctx.dur, t, ylo:-P.th0*1.15, yhi:P.th0*1.15, series:[{pts:St.trace, color:"--pos", name:"実際"}, {fn:s => P.th0*Math.cos(s*PI2/T0), color:"--ink3", name:"近似"}]});
+    ctx.ro(table([[`近似の周期 2π√(${S("L")}/${S("g")})`, `${f(T0,3)} s`], [`実際の周期（計算）`, `${f(Tex,3)} s`], [`シミュレーションで測った周期`, meas ? `${f(meas,3)} s` : "測定中…"], [`sin ${S("θ")}<sub>0</sub> と ${S("θ")}<sub>0</sub>〔rad〕`, `${f(Math.sin(th0),4)} と ${f(th0,4)}`]]));
+    ctx.eqs(`<p class="eq">接線方向：${S("m")}${S("L")}${S("θ")}″ ＝ −${S("m")}${S("g")} sin ${S("θ")}　小さい ${S("θ")} では sin ${S("θ")} ≒ ${S("θ")} → ${S("θ")}″ ＝ −(${S("g")}/${S("L")})${S("θ")}（単振動）</p><p class="eq">実際の周期 ≒ ${S("T")}<sub>0</sub>(1 ＋ ${S("θ")}<sub>0</sub>²/16 ＋ …)</p>`);
+  },
+  asks:[
+    ["θ₀ ＝ 10° と 60° で周期を比べよう。", "10° ではほぼ近似どおり。60° では約 7% 長くなる。"],
+    ["糸の長さを4倍にすると周期は何倍か。", "2倍（√4）。"],
+    ["θ₀ を大きくすると、近似の振り子とずれていくのはなぜか。", "sin θ ＜ θ なので実際の復元力が近似より小さく、ゆっくり振れるから。"]
+  ]
+};
+
+LAB.app({title:"単振動ラボ", modes:{circle, spring:springMode, pendulum}});
+})();
+</script>
+</body>
+</html>

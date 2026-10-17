@@ -24,7 +24,8 @@ window.UNIT_LIST = [
     { id: "momentum",   title: "3 運動量と力積",            file: "units/momentum.js" },
     { id: "anim-circular", title: "▶ 円運動ラボ",          href: "anim/circular.html#uniform", note: "等速円運動の位置・速度・加速度ベクトル（速度を1点から並べると Δv は中心向き）、円すい振り子を地面から・回転する人から見る（遠心力）、鉛直面内の円運動と糸がたるむ位置" },
     { id: "circular",   title: "4 円運動と慣性力",          file: "units/circular.js" },
-    { id: "shm",        title: "5 単振動",                  file: null },
+    { id: "anim-shm",   title: "▶ 単振動ラボ",            href: "anim/shm.html#circle", note: "等速円運動の影が単振動（x・v・a のグラフが連動）、ばね振り子（水平・鉛直）とエネルギー、単振り子（振れ角が大きいと周期が長くなる）" },
+    { id: "shm",        title: "5 単振動",                  file: "units/shm.js" },
     { id: "gravitation",title: "6 万有引力",                file: null },
     { id: "gas",        title: "7 気体分子の運動",          file: null }
   ]},
