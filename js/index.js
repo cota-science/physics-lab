@@ -18,7 +18,8 @@ window.UNIT_LIST = [
   { group: "(1) 様々な運動", units: [
     { id: "anim-plane", title: "▶ 平面運動ラボ",            href: "anim/plane.html#proj", note: "放物運動を位置・速度・加速度ベクトルで見る。速度ベクトルを1点から並べると Δv はいつも鉛直下向き。投げる角度と到達距離、斜面への投射も" },
     { id: "plane",      title: "1 平面内の運動",            file: "units/plane.js" },
-    { id: "rigid",      title: "2 剛体のつり合い",          file: null },
+    { id: "anim-rigid", title: "▶ 剛体ラボ",               href: "anim/rigid.html#moment", note: "力のモーメントとうでの長さ（作用点を作用線上で動かす・力の分解）、重心とてこ（密度がかたよった棒の重心を積分で）、はしごのつり合い（どの点のまわりでもモーメントの和が 0）" },
+    { id: "rigid",      title: "2 剛体のつり合い",          file: "units/rigid.js" },
     { id: "momentum",   title: "3 運動量と力積",            file: null },
     { id: "circular",   title: "4 円運動と慣性力",          file: null },
     { id: "shm",        title: "5 単振動",                  file: null },

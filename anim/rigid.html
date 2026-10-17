@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>剛体ラボ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDGothic&family=BIZ+UDPGothic:wght@400;700&display=swap">
+<style>
+/* Layout: 左に剛体と力の図（作用線・うでの長さ・回転の向き）、右に数値とモーメントの表・式。下に設定と「見てみよう」。 */
+:root{
+  --bg:#eef2f1; --surface:#ffffff; --surface2:#f6f8f8; --line:#d3dcda; --grid:#e6ecea; --grid2:#cfd9d6;
+  --ink:#18222e; --ink2:#4a5866; --ink3:#7b8894;
+  --ui:#24406a; --ui-soft:#e3eaf4;
+  --pos:#1d64d8; --vel:#dd5a12; --acc:#22863a; --hl2:#7a4ad8; --hl2-a:rgba(122,74,216,.20); --neg-a:rgba(196,40,90,.18);
+  --ghost:#8a96a3; --ground:#b9a888; --neg:#c4285a;
+  --f-ui:"BIZ UDPGothic","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+  --f-num:"BIZ UDGothic","BIZ UDPGothic",ui-monospace,"Consolas",monospace;
+  --f-sym:"Bookman Old Style","Cambria Math","Cambria","Times New Roman",serif;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10161c; --surface:#171f27; --surface2:#1d2630; --line:#2c3844; --grid:#222c36; --grid2:#33414e;
+  --ink:#e4ebf1; --ink2:#a9b6c2; --ink3:#7d8a96; --ui:#8fb3ec; --ui-soft:#22324a;
+  --pos:#62a3ff; --vel:#ff9150; --acc:#5dd27a; --hl2:#b293ff; --hl2-a:rgba(178,147,255,.24); --neg-a:rgba(255,92,140,.20);
+  --ghost:#7e8b98; --ground:#6d6250; --neg:#ff6e9a; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#10161c; --surface:#171f27; --surface2:#1d2630; --line:#2c3844; --grid:#222c36; --grid2:#33414e;
+  --ink:#e4ebf1; --ink2:#a9b6c2; --ink3:#7d8a96; --ui:#8fb3ec; --ui-soft:#22324a;
+  --pos:#62a3ff; --vel:#ff9150; --acc:#5dd27a; --hl2:#b293ff; --hl2-a:rgba(178,147,255,.24); --neg-a:rgba(255,92,140,.20);
+  --ghost:#7e8b98; --ground:#6d6250; --neg:#ff6e9a; color-scheme:dark;}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:14px;line-height:1.6;padding:0 16px 32px;-webkit-text-size-adjust:100%}
+.wrap{max-width:1280px;margin:0 auto}
+.s{font-family:var(--f-sym);font-style:italic}
+.vb{font-family:var(--f-sym);font-style:italic;font-weight:700}
+sub{font-size:.72em;line-height:0}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+:focus-visible{outline:3px solid var(--ui);outline-offset:2px}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;padding:12px 0 8px}
+.top a.back{color:var(--ui);text-decoration:none;font-size:14px}
+.top h1{font-size:19px;margin:0}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.tabs button{border:1.5px solid var(--line);background:var(--surface);color:var(--ink2);border-radius:999px;padding:6px 14px;font:inherit;font-weight:700;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--ui);border-color:var(--ui);color:var(--surface)}
+.grid{display:grid;gap:12px}
+@media (min-width:920px){.grid{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;min-width:0}
+.card h2{font-size:14px;margin:0 0 6px;color:var(--ink2);font-weight:700}
+canvas{display:block;width:100%;touch-action:pan-y}
+#stage{aspect-ratio:16/10;min-height:240px}
+@media (max-width:600px){#stage{aspect-ratio:1/1}}
+#aux{aspect-ratio:16/10}
+.graphs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.graphs canvas{aspect-ratio:4/3;background:var(--surface2);border-radius:6px}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}
+.btn{border:1.5px solid var(--ui);background:var(--ui);color:var(--surface);border-radius:8px;padding:6px 14px;font:inherit;font-weight:700;cursor:pointer;min-width:44px;min-height:36px}
+.btn.ghost{background:transparent;color:var(--ui)}
+.time{flex:1 1 160px;display:flex;align-items:center;gap:8px;min-width:0}
+.time input{flex:1;min-width:0}
+.ctrls{display:grid;gap:8px 16px;grid-template-columns:1fr}
+@media (min-width:640px){.ctrls{grid-template-columns:1fr 1fr}}
+.ctrl label{display:flex;justify-content:space-between;gap:8px;font-weight:700;color:var(--ink2)}
+.ctrl input[type=range]{width:100%;accent-color:var(--ui)}
+.ctrl select{font:inherit;padding:4px 6px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.toggles{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px}
+.toggles label{display:flex;align-items:center;gap:4px;cursor:pointer}
+.toggles input{accent-color:var(--ui);width:18px;height:18px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--ink2);margin-top:6px}
+.legend i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:4px;border-radius:2px}
+table.ro{border-collapse:collapse;width:100%;font-size:14px}
+table.ro td{padding:3px 6px;border-bottom:1px solid var(--grid)}
+table.ro td:last-child{text-align:right}
+.eq{font-size:14px;margin:4px 0;overflow-wrap:anywhere}
+.eq b{color:var(--ui)}
+details.ask{margin-top:6px}
+details.ask summary{cursor:pointer;font-weight:700;color:var(--ui)}
+.qs{margin:6px 0 0;padding-left:1.4em}
+.qs li{margin:4px 0}
+.qs details{display:inline}
+.qs details summary{display:inline;cursor:pointer;color:var(--ui);font-size:13px}
+.note{font-size:13px;color:var(--ink3);margin:6px 0 0}
+.tag{display:inline-block;font-size:11px;font-weight:700;border-radius:4px;padding:0 5px;margin-right:4px;vertical-align:1px;line-height:1.6}
+.tag.c{color:#7a3db8;border:1px solid #7a3db8}
+.tag.n{color:var(--ink3);border:1px solid var(--ink3)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .tag.c{color:#c9a2ff;border-color:#c9a2ff}}
+:root[data-theme="dark"] .tag.c{color:#c9a2ff;border-color:#c9a2ff}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <a class="back" href="../index.html">‹ 物理ラボ</a>
+  <h1>剛体ラボ</h1>
+</header>
+<nav class="tabs" role="tablist" aria-label="モード">
+  <button role="tab" data-mode="moment">力のモーメント</button>
+  <button role="tab" data-mode="balance">重心とてこ</button>
+  <button role="tab" data-mode="ladder">はしごのつり合い</button>
+</nav>
+
+<div class="grid">
+  <section class="card" aria-labelledby="hStage">
+    <h2 id="hStage">剛体と力</h2>
+    <canvas id="stage" role="img" aria-label="剛体と、はたらく力の作用線・うでの長さ"></canvas>
+    <div class="legend" id="legend"></div>
+    <p class="note" id="banner" style="font-weight:700"></p>
+    <p class="note" id="stageNote"></p>
+  </section>
+
+  <section class="card" aria-labelledby="hRo">
+    <h2 id="hRo">数値と式</h2>
+    <div id="ro"></div>
+    <div id="eqs"></div>
+  </section>
+
+  <section class="card" aria-labelledby="hCtrl">
+    <h2 id="hCtrl">設定</h2>
+    <div class="ctrls" id="ctrls"></div>
+    <div class="toggles" id="toggles"></div>
+  </section>
+
+  <section class="card" aria-labelledby="hAsk">
+    <h2 id="hAsk">見てみよう</h2>
+    <ol class="qs" id="asks"></ol>
+  </section>
+</div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const $ = id => document.getElementById(id);
+const DEF = {
+  moment:{r:0.5, F:20, phi:60, s:0},
+  balance:{mr:1.0, k:0, m1:1.0, x1:0.1, m2:0.5, x2:0.9, xp:0.5},
+  ladder:{th:60, W:200, w:0, p:0.5, mu:0.4, ax:"A"}
+};
+let mode = "moment";
+const P = {};
+const SHOW = {arm:true, comp:false, line:true};
+
+/* ---------- format & drawing helpers ---------- */
+const f = (n, d=2) => (Math.abs(n) < 0.5*Math.pow(10,-d) ? 0 : n).toFixed(d).replace("-", "−");
+const S = s => `<span class="s">${s}</span>`;
+function css(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function prep(cv){
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
+  if(cv.width !== Math.round(w*dpr) || cv.height !== Math.round(h*dpr)){ cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr); }
+  const c = cv.getContext("2d"); c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,w,h);
+  return {c, w, h};
+}
+function arrow(c, x1, y1, x2, y2, color, w=2.6, dash){
+  const L = Math.hypot(x2-x1, y2-y1); if(L < 1.5) return;
+  c.save(); c.strokeStyle = color; c.fillStyle = color; c.lineWidth = w; if(dash) c.setLineDash(dash);
+  c.beginPath(); c.moveTo(x1,y1); c.lineTo(x2,y2); c.stroke(); c.setLineDash([]);
+  const a = Math.atan2(y2-y1, x2-x1), hl = Math.min(11, L*0.45);
+  c.beginPath(); c.moveTo(x2,y2); c.lineTo(x2-hl*Math.cos(a-0.4), y2-hl*Math.sin(a-0.4)); c.lineTo(x2-hl*Math.cos(a+0.4), y2-hl*Math.sin(a+0.4)); c.closePath(); c.fill();
+  c.restore();
+}
+function label(c, txt, x, y, color, align="left", font){
+  c.save(); c.fillStyle = color; c.font = font || `13px ${css("--f-ui")}`; c.textAlign = align; c.textBaseline = "middle"; c.fillText(txt, x, y); c.restore();
+}
+const symFont = (px=14, bold) => `${bold ? "bold " : ""}italic ${px}px ${css("--f-sym")}`;
+function fit(w, h, b, pad=16){
+  const s = Math.min((w-2*pad)/(b.x1-b.x0), (h-2*pad)/(b.y1-b.y0));
+  const ox = (w - (b.x1-b.x0)*s)/2, oy = (h - (b.y1-b.y0)*s)/2;
+  return {s, X:x => ox + (x-b.x0)*s, Y:y => h - oy - (y-b.y0)*s};
+}
+function curvedArrow(c, cx, cy, R, sign, color){
+  if(!sign) return;
+  c.save(); c.strokeStyle = color; c.fillStyle = color; c.lineWidth = 2.2;
+  const a0 = -Math.PI*0.75, a1 = -Math.PI*0.25;     // canvas angles (y down): upper arc
+  c.beginPath();
+  if(sign > 0){ c.arc(cx, cy, R, a1, a0, true); } else { c.arc(cx, cy, R, a0, a1, false); }
+  c.stroke();
+  const end = sign > 0 ? a0 : a1, ex = cx + R*Math.cos(end), ey = cy + R*Math.sin(end);
+  const tang = sign > 0 ? end - Math.PI/2 : end + Math.PI/2;
+  c.beginPath(); c.moveTo(ex, ey); c.lineTo(ex - 9*Math.cos(tang-0.45), ey - 9*Math.sin(tang-0.45)); c.lineTo(ex - 9*Math.cos(tang+0.45), ey - 9*Math.sin(tang+0.45)); c.closePath(); c.fill();
+  c.restore();
+}
+
+/* ---------- controls ---------- */
+const CTRLS = {
+  moment:[["r","O から作用点までの距離 "+S("r"),0.1,1.0,0.01,"m",2],["F","力の大きさ "+S("F"),1,50,1,"N",0],["phi","棒と力のなす角 "+S("θ"),0,180,1,"°",0],["s","作用点を作用線上で動かす",-0.6,0.6,0.01,"m",2]],
+  balance:[["mr","棒の質量",0,2,0.1,"kg",1],["k","密度のかたより "+S("k")+"（λ ∝ 1 ＋ "+S("k")+S("x")+"）",0,5,0.1,"",1],["m1","おもり1の質量",0,2,0.1,"kg",1],["x1","おもり1の位置",0,1,0.01,"m",2],["m2","おもり2の質量",0,2,0.1,"kg",1],["x2","おもり2の位置",0,1,0.01,"m",2],["xp","支点の位置",0,1,0.01,"m",2]],
+  ladder:[["th","床とはしごのなす角 "+S("θ"),20,85,1,"°",0],["W","はしごの重さ",50,400,10,"N",0],["w","人の重さ",0,800,10,"N",0],["p","人の位置（A からはしごの長さの何割）",0,1,0.01,"",2],["mu","床の静止摩擦係数 "+S("μ"),0,1,0.01,"",2]]
+};
+const TOGGLES = {
+  moment:[["arm","うでの長さ"],["comp","力の分解（棒に平行・垂直）"],["line","作用線"]],
+  balance:[], ladder:[]
+};
+function buildControls(){
+  $("ctrls").innerHTML = CTRLS[mode].map(([k, lab, mn, mx, st]) =>
+    `<div class="ctrl"><label for="c-${k}"><span>${lab}</span><span class="num" id="v-${k}"></span></label><input type="range" id="c-${k}" data-k="${k}" min="${mn}" max="${mx}" step="${st}"></div>`).join("")
+    + (mode === "ladder" ? `<div class="ctrl"><label for="c-ax"><span>モーメントを考える点</span></label><select id="c-ax"><option value="A">A（床との接点）</option><option value="B">B（壁との接点）</option><option value="G">G（重心）</option></select></div>` : "")
+    + (mode === "balance" ? `<div class="ctrl"><label><span>支点を重心に</span></label><button class="btn ghost" type="button" id="toG">支点を重心の位置へ</button></div>` : "");
+  $("toggles").innerHTML = TOGGLES[mode].map(([k, lab]) => `<label><input type="checkbox" data-t="${k}" ${SHOW[k] ? "checked" : ""}>${lab}</label>`).join("");
+  $("ctrls").querySelectorAll("input[type=range]").forEach(inp => inp.addEventListener("input", e => { P[e.target.dataset.k] = +e.target.value; update(); }));
+  $("toggles").querySelectorAll("input").forEach(inp => inp.addEventListener("change", e => { SHOW[e.target.dataset.t] = e.target.checked; draw(); }));
+  if($("c-ax")) $("c-ax").addEventListener("change", e => { P.ax = e.target.value; update(); });
+  if($("toG")) $("toG").addEventListener("click", () => { P.xp = Math.round(balanceData().xG*100)/100; update(); });
+  const lg = {
+    moment:`<span><i style="background:var(--vel)"></i>力 ${S("F")}</span><span><i style="background:var(--hl2)"></i>うでの長さ ${S("l")}</span><span><i style="background:var(--ink3)"></i>作用線</span>`,
+    balance:`<span><i style="background:var(--vel)"></i>おもりの重さ</span><span><i style="background:var(--acc)"></i>全体の重力（重心 G）</span><span><i style="background:var(--pos)"></i>支点の力</span>`,
+    ladder:`<span><i style="background:var(--acc)"></i>重力 W（はしご）・w（人）</span><span><i style="background:var(--vel)"></i>壁の垂直抗力 N<sub>B</sub></span><span><i style="background:var(--pos)"></i>床の垂直抗力 N<sub>A</sub></span><span><i style="background:var(--hl2)"></i>床の摩擦力 f</span>`
+  };
+  $("legend").innerHTML = lg[mode];
+}
+function syncControls(){
+  CTRLS[mode].forEach(([k, , , , , u, d]) => { const el = $("c-"+k); if(el){ el.value = P[k]; } const v = $("v-"+k); if(v) v.textContent = `${f(P[k], d)}${u ? " "+u : ""}`.replace(" °","°"); });
+  if($("c-ax")) $("c-ax").value = P.ax;
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.mode === mode));
+}
+
+/* ---------- moment ---------- */
+function drawMoment(){
+  const {c, w, h} = prep($("stage"));
+  const ink2 = css("--ink2"), ink3 = css("--ink3"), vel = css("--vel"), hl2 = css("--hl2"), pos = css("--pos");
+  const t = fit(w, h, {x0:-0.55, x1:1.45, y0:-0.75, y1:0.95});
+  const phi = P.phi*Math.PI/180, ux = Math.cos(phi), uy = Math.sin(phi);
+  const Px = P.r, Py = 0, Ax = Px + P.s*ux, Ay = Py + P.s*uy;   // moved application point
+  const k = 0.55/50;                                             // m per N
+  // rod
+  c.strokeStyle = ink3; c.lineWidth = 9; c.lineCap = "round"; c.globalAlpha = 0.55;
+  c.beginPath(); c.moveTo(t.X(-0.05), t.Y(0)); c.lineTo(t.X(Math.max(P.r, 0.1)+0.05), t.Y(0)); c.stroke(); c.globalAlpha = 1; c.lineCap = "butt";
+  // pivot
+  c.fillStyle = css("--surface"); c.strokeStyle = ink2; c.lineWidth = 2; c.beginPath(); c.arc(t.X(0), t.Y(0), 7, 0, 7); c.fill(); c.stroke();
+  label(c, "O", t.X(0)-12, t.Y(0)-14, ink2, "center", `bold 14px ${css("--f-ui")}`);
+  // action line
+  if(SHOW.line){ c.strokeStyle = ink3; c.lineWidth = 1.2; c.setLineDash([6,5]); c.beginPath(); c.moveTo(t.X(Px-3*ux), t.Y(Py-3*uy)); c.lineTo(t.X(Px+3*ux), t.Y(Py+3*uy)); c.stroke(); c.setLineDash([]); }
+  // arm
+  const sdot = (0-Px)*ux + (0-Py)*uy, fx = Px + sdot*ux, fy = Py + sdot*uy, arm = Math.abs(Px*uy - Py*ux);
+  if(SHOW.arm && arm > 1e-3){
+    c.strokeStyle = hl2; c.lineWidth = 3; c.beginPath(); c.moveTo(t.X(0), t.Y(0)); c.lineTo(t.X(fx), t.Y(fy)); c.stroke();
+    // right-angle mark
+    const nx = -fx/arm, ny = -fy/arm, q = 0.04;
+    c.lineWidth = 1.4; c.beginPath(); c.moveTo(t.X(fx+ux*q), t.Y(fy+uy*q)); c.lineTo(t.X(fx+ux*q+nx*q), t.Y(fy+uy*q+ny*q)); c.lineTo(t.X(fx+nx*q), t.Y(fy+ny*q)); c.stroke();
+    label(c, "l", t.X(fx/2)+8, t.Y(fy/2)+2, hl2, "left", symFont(16, true));
+  }
+  // r label & angle
+  label(c, `r ＝ ${f(P.r,2)} m`, t.X(P.r/2), t.Y(0)+18, ink2, "center");
+  c.strokeStyle = ink2; c.lineWidth = 1.2; c.setLineDash([3,3]); c.beginPath(); c.moveTo(t.X(Px), t.Y(Py)); c.lineTo(t.X(Px+0.3), t.Y(Py)); c.stroke(); c.setLineDash([]);
+  if(P.phi > 0){ c.beginPath(); c.arc(t.X(Px), t.Y(Py), 26, 0, -phi, true); c.stroke(); label(c, `θ ＝ ${P.phi}°`, t.X(Px)+30, t.Y(Py)-14 - (P.phi > 120 ? 0 : 0), ink2); }
+  // force components
+  if(SHOW.comp){
+    arrow(c, t.X(Px), t.Y(Py), t.X(Px + P.F*k*ux), t.Y(Py), vel, 1.8, [5,4]);
+    arrow(c, t.X(Px), t.Y(Py), t.X(Px), t.Y(Py + P.F*k*uy), vel, 1.8, [5,4]);
+    label(c, `F sin θ ＝ ${f(P.F*uy,1)} N（回す）`, t.X(Px)-8, t.Y(Py + P.F*k*uy/2), vel, "right", `12px ${css("--f-ui")}`);
+    label(c, `F cos θ（回さない）`, t.X(Px + P.F*k*ux), t.Y(Py) + 14, vel, ux >= 0 ? "left" : "right", `12px ${css("--f-ui")}`);
+  }
+  // force
+  arrow(c, t.X(Ax), t.Y(Ay), t.X(Ax + P.F*k*ux), t.Y(Ay + P.F*k*uy), vel, 3.4);
+  c.fillStyle = vel; c.beginPath(); c.arc(t.X(Ax), t.Y(Ay), 4.5, 0, 7); c.fill();
+  label(c, "F", t.X(Ax + P.F*k*ux)+8, t.Y(Ay + P.F*k*uy)-6, vel, "left", symFont(17, true));
+  if(Math.abs(P.s) > 0.005){ c.fillStyle = ink3; c.beginPath(); c.arc(t.X(Px), t.Y(Py), 3.5, 0, 7); c.fill(); }
+  // rotation sense
+  const Mz = P.F*(Px*uy - Py*ux);
+  curvedArrow(c, t.X(0), t.Y(0), 34, Math.abs(Mz) < 1e-6 ? 0 : Math.sign(Mz), pos);
+  $("banner").textContent = Math.abs(Mz) < 1e-6 ? "作用線が O を通るので、回転させない（M ＝ 0）" : (Mz > 0 ? "反時計回りに回そうとする（M ＞ 0）" : "時計回りに回そうとする（M ＜ 0）");
+  $("banner").style.color = pos;
+  const rows = [["うでの長さ "+S("l")+" ＝ "+S("r")+" sin "+S("θ"), `${f(arm,3)} m`],["棒に垂直な成分 "+S("F")+" sin "+S("θ"), `${f(P.F*uy,2)} N`],["力のモーメント "+S("M")+"（反時計回り正）", `${f(Mz,2)} N·m`],["作用点の移動", `${f(P.s,2)} m（${S("M")} は変わらない）`]];
+  $("ro").innerHTML = table(rows);
+  $("eqs").innerHTML = `<p class="eq">${S("M")} ＝ ${S("F")}${S("l")} ＝ ${P.F} × ${f(arm,3)} ＝ <b>${f(Math.abs(Mz),2)} N·m</b></p>
+  <p class="eq">${S("M")} ＝ (${S("F")} sin ${S("θ")}) × ${S("r")} ＝ ${f(P.F*uy,2)} × ${f(P.r,2)} ＝ <b>${f(P.F*uy*P.r,2)} N·m</b>（同じ値）</p>`;
+}
+
+/* ---------- balance ---------- */
+function balanceData(){
+  const k = P.k, xGr = (0.5 + k/3)/(1 + k/2);
+  const parts = [{n:"棒", m:P.mr, x:xGr}, {n:"おもり1", m:P.m1, x:P.x1}, {n:"おもり2", m:P.m2, x:P.x2}];
+  const Mt = parts.reduce((a, q) => a + q.m, 0), Sx = parts.reduce((a, q) => a + q.m*q.x, 0);
+  const xG = Mt > 0 ? Sx/Mt : 0.5;
+  const tau = -9.8*parts.reduce((a, q) => a + q.m*(q.x - P.xp), 0);   // CCW positive
+  return {parts, Mt, Sx, xG, tau, xGr};
+}
+function drawBalance(){
+  const {c, w, h} = prep($("stage"));
+  const ink2 = css("--ink2"), ink3 = css("--ink3"), vel = css("--vel"), acc = css("--acc"), pos = css("--pos");
+  const D = balanceData();
+  const t = fit(w, h, {x0:-0.12, x1:1.12, y0:-0.62, y1:0.42});
+  const bal = Math.abs(D.tau) < 0.02;
+  const ang = bal ? 0 : 0.30*Math.tanh(D.tau/1.5);       // radians, CCW positive
+  const rot = (x, y) => { const dx = x - P.xp, c0 = Math.cos(ang), s0 = Math.sin(ang); return [P.xp + dx*c0 - y*s0, dx*s0 + y*c0]; };
+  // ground ruler
+  c.fillStyle = ink3; c.font = `11px ${css("--f-num")}`; c.textAlign = "center";
+  for(let i = 0; i <= 10; i++){ const xx = i/10; c.fillRect(t.X(xx)-0.5, t.Y(-0.5), 1, 6); if(i%2 === 0) c.fillText(f(xx,1), t.X(xx), t.Y(-0.5)+18); }
+  c.fillRect(t.X(0), t.Y(-0.5), t.X(1)-t.X(0), 1);
+  label(c, "x〔m〕", t.X(1.1), t.Y(-0.5)-10, ink3, "right", `11px ${css("--f-ui")}`);
+  // pivot
+  c.fillStyle = ink2; c.beginPath(); c.moveTo(t.X(P.xp), t.Y(0)-1); c.lineTo(t.X(P.xp)-14, t.Y(-0.13)); c.lineTo(t.X(P.xp)+14, t.Y(-0.13)); c.closePath(); c.fill();
+  // rod with density shading
+  const thick = 0.035, N = 40;
+  for(let i = 0; i < N; i++){
+    const a = i/N, b = (i+1)/N, lam = (1 + P.k*(a+b)/2)/(1 + P.k);
+    const p1 = rot(a, -thick/2), p2 = rot(b, -thick/2), p3 = rot(b, thick/2), p4 = rot(a, thick/2);
+    c.fillStyle = ink2; c.globalAlpha = P.mr > 0 ? 0.15 + 0.6*lam : 0.12;
+    c.beginPath(); c.moveTo(t.X(p1[0]), t.Y(p1[1])); c.lineTo(t.X(p2[0]), t.Y(p2[1])); c.lineTo(t.X(p3[0]), t.Y(p3[1])); c.lineTo(t.X(p4[0]), t.Y(p4[1])); c.closePath(); c.fill();
+  }
+  c.globalAlpha = 1;
+  // weights
+  [[P.m1, P.x1, "1"], [P.m2, P.x2, "2"]].forEach(([mm, xx, nm]) => {
+    if(mm <= 0) return;
+    const p = rot(xx, -thick/2), hang = 0.16, sz = 0.04 + 0.03*Math.sqrt(mm);
+    c.strokeStyle = ink3; c.lineWidth = 1.2; c.beginPath(); c.moveTo(t.X(p[0]), t.Y(p[1])); c.lineTo(t.X(p[0]), t.Y(p[1]-hang)); c.stroke();
+    c.fillStyle = vel; c.globalAlpha = 0.85; c.fillRect(t.X(p[0]-sz/2), t.Y(p[1]-hang), sz*t.s, sz*t.s); c.globalAlpha = 1;
+    label(c, `${f(mm,1)} kg`, t.X(p[0]), t.Y(p[1]-hang-sz)+12, vel, "center", `12px ${css("--f-num")}`);
+  });
+  // center of gravity & weight arrow
+  if(D.Mt > 0){
+    const g = rot(D.xG, 0);
+    arrow(c, t.X(g[0]), t.Y(g[1]), t.X(g[0]), t.Y(g[1]) + 30 + 14*D.Mt, acc, 3);
+    c.fillStyle = acc; c.beginPath(); c.arc(t.X(g[0]), t.Y(g[1]), 5, 0, 7); c.fill();
+    label(c, "G", t.X(g[0])+8, t.Y(g[1])-12, acc, "left", `bold 14px ${css("--f-ui")}`);
+    if(P.mr > 0){ const gr = rot(D.xGr, 0); c.strokeStyle = ink2; c.lineWidth = 1.2; c.beginPath(); c.moveTo(t.X(gr[0])-5, t.Y(gr[1])+5); c.lineTo(t.X(gr[0])+5, t.Y(gr[1])-5); c.moveTo(t.X(gr[0])-5, t.Y(gr[1])-5); c.lineTo(t.X(gr[0])+5, t.Y(gr[1])+5); c.stroke(); }
+    // support force
+    arrow(c, t.X(P.xp), t.Y(-0.13)+0, t.X(P.xp), t.Y(-0.13) - (30 + 14*D.Mt), pos, 2.2, [5,3]);
+  }
+  curvedArrow(c, t.X(P.xp), t.Y(0), 30, bal ? 0 : Math.sign(D.tau), pos);
+  $("banner").textContent = bal ? "つり合っている：支点のまわりのモーメントの和 ≒ 0（支点が重心の真下）" : (D.tau > 0 ? "反時計回りに回る（左が下がる）：重心が支点より左" : "時計回りに回る（右が下がる）：重心が支点より右");
+  $("banner").style.color = bal ? acc : pos;
+  const rows = D.parts.filter(q => q.m > 0).map(q => [`${q.n}（${S("m")} ＝ ${f(q.m,1)} kg、${S("x")} ＝ ${f(q.x,3)} m）`, `${S("m")}${S("x")} ＝ ${f(q.m*q.x,3)} kg·m`]);
+  rows.push([`重心 ${S("x")}<sub>G</sub> ＝ Σ${S("m")}${S("x")} ÷ Σ${S("m")}`, `${f(D.Sx,3)} ÷ ${f(D.Mt,1)} ＝ ${f(D.xG,3)} m`]);
+  rows.push([`支点のまわりのモーメントの和（反時計回り正）`, `${f(D.tau,2)} N·m`]);
+  $("ro").innerHTML = table(rows);
+  $("eqs").innerHTML = `<p class="eq"><span class="tag n">微積なし</span>${S("x")}<sub>G</sub> ＝ (${S("m")}<sub>棒</sub>${S("x")}<sub>棒</sub> ＋ ${S("m")}₁${S("x")}₁ ＋ ${S("m")}₂${S("x")}₂) ÷ (${S("m")}<sub>棒</sub> ＋ ${S("m")}₁ ＋ ${S("m")}₂)。棒の重心（×印）は、棒の質量がそこに集まっていると考える。</p>
+  <p class="eq"><span class="tag c">微積</span>棒の線密度 ${S("λ")} ∝ 1 ＋ ${P.k ? f(P.k,1) : S("k")}${S("x")} のとき ${S("x")}<sub>棒</sub> ＝ ∫₀¹${S("x")}${S("λ")}d${S("x")} ÷ ∫₀¹${S("λ")}d${S("x")} ＝ (1/2 ＋ ${S("k")}/3) ÷ (1 ＋ ${S("k")}/2) ＝ <b>${f(D.xGr,3)} m</b>${P.k ? "" : "（一様：中点）"}</p>`;
+}
+
+/* ---------- ladder ---------- */
+function ladderData(){
+  const L = 4, th = P.th*Math.PI/180, cth = Math.cos(th), sth = Math.sin(th);
+  const A = [0,0], B = [L*cth, L*sth], G = [L*cth/2, L*sth/2], H = [P.p*L*cth, P.p*L*sth];
+  const NB = (P.W/2 + P.w*P.p)*cth/sth, NA = P.W + P.w, fr = NB, fmax = P.mu*NA;
+  const forces = [
+    {n:"はしごの重力", sh:"W", at:G, F:[0, -P.W], col:"--acc"},
+    {n:"人が押す力", sh:"w", at:H, F:[0, -P.w], col:"--acc"},
+    {n:"壁の垂直抗力 N<sub>B</sub>", sh:"NB", at:B, F:[-NB, 0], col:"--vel"},
+    {n:"床の垂直抗力 N<sub>A</sub>", sh:"NA", at:A, F:[0, NA], col:"--pos"},
+    {n:"床の摩擦力 f", sh:"f", at:A, F:[fr, 0], col:"--hl2"}
+  ].filter(q => Math.hypot(q.F[0], q.F[1]) > 1e-9);
+  const ax = {A, B, G}[P.ax];
+  forces.forEach(q => { q.tau = (q.at[0]-ax[0])*q.F[1] - (q.at[1]-ax[1])*q.F[0]; });
+  return {L, th, A, B, G, H, NB, NA, fr, fmax, forces, ax, slip: fr > fmax + 1e-9, mureq: NA > 0 ? fr/NA : 0};
+}
+function drawLadder(){
+  const {c, w, h} = prep($("stage"));
+  const ink2 = css("--ink2"), ink3 = css("--ink3");
+  const D = ladderData();
+  const t = fit(w, h, {x0:-1.6, x1:D.B[0]+1.2, y0:-0.5, y1:Math.max(D.B[1], 1.6)+0.5});
+  // wall & floor
+  c.fillStyle = css("--ground"); c.globalAlpha = 0.45;
+  c.fillRect(t.X(D.B[0]), t.Y(D.B[1]+0.5), 12, t.Y(0)-t.Y(D.B[1]+0.5)); c.fillRect(t.X(-1.4), t.Y(0), t.X(D.B[0])-t.X(-1.4)+12, 10);
+  c.globalAlpha = 1; c.strokeStyle = ink2; c.lineWidth = 1.5;
+  c.beginPath(); c.moveTo(t.X(-1.4), t.Y(0)); c.lineTo(t.X(D.B[0]), t.Y(0)); c.lineTo(t.X(D.B[0]), t.Y(D.B[1]+0.5)); c.stroke();
+  // ladder
+  c.strokeStyle = ink3; c.lineWidth = 8; c.lineCap = "round"; c.globalAlpha = 0.6;
+  c.beginPath(); c.moveTo(t.X(0), t.Y(0)); c.lineTo(t.X(D.B[0]), t.Y(D.B[1])); c.stroke(); c.globalAlpha = 1; c.lineCap = "butt";
+  label(c, "A", t.X(0)-8, t.Y(0)+14, ink2, "right", `bold 14px ${css("--f-ui")}`);
+  label(c, "B", t.X(D.B[0])-10, t.Y(D.B[1])-12, ink2, "right", `bold 14px ${css("--f-ui")}`);
+  c.fillStyle = ink2; c.beginPath(); c.arc(t.X(D.G[0]), t.Y(D.G[1]), 4, 0, 7); c.fill(); label(c, "G", t.X(D.G[0])-8, t.Y(D.G[1])-10, ink2, "right");
+  c.strokeStyle = ink2; c.lineWidth = 1.2; c.beginPath(); c.arc(t.X(0), t.Y(0), 30, -D.th, 0); c.stroke(); label(c, `${P.th}°`, t.X(0)+34, t.Y(0)-10, ink2);
+  // person
+  if(P.w > 0){
+    const hx = t.X(D.H[0]), hy = t.Y(D.H[1]);
+    c.strokeStyle = ink2; c.lineWidth = 2; c.beginPath(); c.arc(hx, hy-34, 7, 0, 7); c.moveTo(hx, hy-27); c.lineTo(hx, hy-8); c.moveTo(hx, hy-8); c.lineTo(hx-6, hy); c.moveTo(hx, hy-8); c.lineTo(hx+6, hy); c.moveTo(hx-8, hy-20); c.lineTo(hx+8, hy-20); c.stroke();
+  }
+  // axis marker
+  c.strokeStyle = css("--ui"); c.lineWidth = 2.4; c.beginPath(); c.arc(t.X(D.ax[0]), t.Y(D.ax[1]), 11, 0, 7); c.stroke();
+  // forces
+  const maxF = Math.max(...D.forces.map(q => Math.hypot(q.F[0], q.F[1])), 1), k = 1.6/maxF;
+  D.forces.forEach(q => {
+    const col = css(q.col), x0 = t.X(q.at[0]), y0 = t.Y(q.at[1]);
+    let x1 = t.X(q.at[0] + q.F[0]*k), y1 = t.Y(q.at[1] + q.F[1]*k);
+    if(q.n.startsWith("人")){ x1 += 0; }
+    arrow(c, x0, y0, x1, y1, col, 3);
+    const v = Math.hypot(q.F[0], q.F[1]);
+    const txt = `${q.sh} ${f(v,0)} N`;
+    const right = q.F[0] > 0 || (q.F[0] === 0 && q.at === D.G);
+    const isW = q.at === D.G, isH = q.at === D.H && q.F[1] < 0;
+    const al = q.F[0] < 0 ? "right" : q.F[0] > 0 ? "left" : (q.at === D.A || isW) ? "right" : "left";
+    label(c, txt, x1 + (al === "right" ? -6 : 6), y1 + (q.F[1] < 0 ? 4 : q.F[1] > 0 ? 6 : -10), col, al, `12px ${css("--f-ui")}`);
+  });
+  if(D.slip){
+    arrow(c, t.X(0)+4, t.Y(0)+22, t.X(0)-40, t.Y(0)+22, css("--neg"), 2.4);
+    label(c, "すべる！", t.X(0)-46, t.Y(0)+22, css("--neg"), "right", `bold 13px ${css("--f-ui")}`);
+  }
+  $("banner").textContent = D.slip ? `すべる：必要な摩擦力 ${f(D.fr,0)} N が最大摩擦力 μN ＝ ${f(D.fmax,0)} N を超える（必要な μ ≧ ${f(D.mureq,2)}）` : `静止できる：必要な摩擦力 ${f(D.fr,0)} N ≦ 最大摩擦力 ${f(D.fmax,0)} N`;
+  $("banner").style.color = D.slip ? css("--neg") : css("--acc");
+  const sum = D.forces.reduce((a, q) => a + q.tau, 0);
+  const rows = D.forces.map(q => [q.n, `${f(q.tau,0)} N·m`]);
+  rows.push([`<b>和（${P.ax} のまわり）</b>`, `<b>${f(sum,0)} N·m</b>`]);
+  $("ro").innerHTML = `<p class="note" style="margin:0 0 4px">${P.ax} のまわりの力のモーメント（はしごの長さ 4.0 m、反時計回り正）。軸を変えても和は 0。</p>` + table(rows)
+    + table([["N<sub>A</sub> ＝ はしご ＋ 人の重さ", `${f(D.NA,0)} N`],["N<sub>B</sub> ＝ f", `${f(D.NB,1)} N`],["必要な μ ＝ f ÷ N<sub>A</sub>", f(D.mureq,3)]]);
+  $("eqs").innerHTML = `<p class="eq">A のまわり：N<sub>B</sub> × ${S("L")} sin ${S("θ")} ＝ (${S("W")}/2 ＋ ${S("w")}${S("p")}) × ${S("L")} cos ${S("θ")}　→　N<sub>B</sub> ＝ (${S("W")}/2 ＋ ${S("w")}${S("p")}) ÷ tan ${S("θ")}</p>
+  <p class="eq">人がいないとき、必要な μ ＝ 1/(2 tan ${S("θ")}) ＝ <b>${f(1/(2*Math.tan(D.th)),3)}</b></p>`;
+}
+
+function table(rows){ return `<table class="ro">${rows.map(r => `<tr><td>${r[0]}</td><td class="num">${r[1]}</td></tr>`).join("")}</table>`; }
+
+const ASKS = {
+  moment:[
+    ["θ を 0° から 180° まで動かそう。モーメントが最大・0 になるのはいつか。", "θ ＝ 90°（棒に垂直）で最大、θ ＝ 0°・180°（作用線が O を通る）で 0。"],
+    ["「作用点を作用線上で動かす」を動かしても、M が変わらないのはなぜか。", "うでの長さ（O から作用線までの距離）が変わらないから。"],
+    ["「力の分解」をオンにしよう。回転にきいているのはどちらの成分か。", "棒に垂直な成分 F sin θ。棒に平行な成分は作用線が O を通るので回さない。"]
+  ],
+  balance:[
+    ["おもりを1つ（m₁ ＝ 0 にする）にして、支点を動かしてつり合わせよう。このとき支点はどこにあるか。", "重心 G の真下。支点のまわりの重力のモーメントの和が 0 になる。"],
+    [S("k") + " を大きくすると、棒の重心（×印）はどちらへ動くか。", "右（重いほう）。k ＝ 3 なら (1/2 ＋ 1)/(1 ＋ 1.5) ＝ 0.60 m。"],
+    ["棒の質量を 0 にして、1.0 kg を 0.10 m、0.5 kg を 0.90 m に置いたときの重心を計算し、確かめよう。", "(0.10 ＋ 0.45) ÷ 1.5 ≒ 0.367 m。"]
+  ],
+  ladder:[
+    ["モーメントを考える点を A・B・G に変えよう。各力のモーメントは変わるが、和はどうなるか。", "いつも 0。つり合っていれば、どの点のまわりでも和は 0。"],
+    ["はしごを寝かせていく（θ を小さくする）と、必要な摩擦力はどうなるか。", "大きくなる。必要な μ ＝ 1/(2 tan θ) は θ が小さいほど大きい。"],
+    ["人がはしごを登っていく（位置を 0 → 1 にする）と、どこですべりやすくなるか。", "上に行くほど N_B ＝ f が大きくなり、すべりやすい。はしごの上のほうが危ない。"]
+  ]
+};
+function renderAsks(){ $("asks").innerHTML = ASKS[mode].map(a => `<li>${a[0]} <details><summary>答え</summary> ${a[1]}</details></li>`).join(""); }
+
+function draw(){ $("stageNote").textContent = mode === "balance" ? "下の目盛りは、傾く前の棒の位置 x〔m〕。棒の濃さは密度（濃いほど重い）、×印は棒だけの重心。" : ""; ({moment:drawMoment, balance:drawBalance, ladder:drawLadder})[mode](); }
+function setHash(){
+  const keys = Object.keys(DEF[mode]);
+  try{ history.replaceState(null, "", "#" + mode + keys.map(k => `&${k}=${P[k]}`).join("")); }catch(e){}
+}
+function update(){ syncControls(); setHash(); draw(); }
+function setMode(m, params){
+  mode = m; Object.keys(P).forEach(k => delete P[k]); Object.assign(P, DEF[m], params || {});
+  buildControls(); renderAsks(); update();
+}
+function readHash(){
+  const parts = location.hash.replace(/^#/, "").split("&");
+  const m = DEF[parts[0]] ? parts[0] : "moment", prm = {};
+  parts.slice(1).forEach(kv => { const [k, v] = kv.split("="); if(!(k in DEF[m])) return; if(k === "ax") prm[k] = ["A","B","G"].includes(v) ? v : "A"; else { const n = parseFloat(v); if(!isNaN(n)) prm[k] = n; } });
+  setMode(m, prm);
+}
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
+window.addEventListener("hashchange", readHash);
+window.addEventListener("resize", draw);
+if(window.matchMedia){ const mq = window.matchMedia("(prefers-color-scheme: dark)"); if(mq.addEventListener) mq.addEventListener("change", draw); }
+readHash();
+})();
+</script>
+</body>
+</html>
