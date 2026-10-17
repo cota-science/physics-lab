@@ -68,6 +68,15 @@ URL の `#` 以降で、モードと値を指定して開けます。問題文�
 - `anim/gravitation.html#orbit&r0=2&v0=5.6`
 - `anim/gas.html#pv&proc=p&p1=1&V1=24.9&V2=33.2`（proc ＝ v 定積・p 定圧・T 等温・a 断熱）
 
+## 検証
+
+`tools/check.py` で、単元の全採点問題が「正解」と判定されるか、誤答ヒントがすべて出るか、スマホ幅（390px）・PC 幅（1280px）ではみ出しや JS エラーがないかを確かめられます（Playwright と Node.js が必要）。
+
+```
+python3 -m http.server 8130        # リポジトリの直下で
+python3 tools/check.py gas "anim/gas.html#kinetic"   # 単元 id と、確かめたいシミュレーターの URL
+```
+
 ## 進み具合
 
 | 大項目 | 単元 | 演習 | シミュレーター |
