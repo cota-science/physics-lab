@@ -28,7 +28,8 @@ window.UNIT_LIST = [
     { id: "shm",        title: "5 単振動",                  file: "units/shm.js" },
     { id: "anim-gravitation", title: "▶ 万有引力ラボ",     href: "anim/gravitation.html#orbit", note: "人工衛星の軌道（円・楕円・放物線・双曲線、等しい時間の扇形で面積速度一定、エネルギーのグラフ）、ケプラーの第3法則、打ち上げと第2宇宙速度（U(r) ＝ −GM/r の図）" },
     { id: "gravitation",title: "6 万有引力",                file: "units/gravitation.js" },
-    { id: "gas",        title: "7 気体分子の運動",          file: null }
+    { id: "anim-gas",   title: "▶ 気体分子ラボ",          href: "anim/gas.html#kinetic", note: "分子の運動と圧力（壁が受ける力積から圧力を測る、速さの分布）、p-V 図と状態変化（定積・定圧・等温・断熱、面積 ＝ 仕事、Q ＝ ΔU ＋ W′）、熱機関のサイクルと熱効率" },
+    { id: "gas",        title: "7 気体分子の運動",          file: "units/gas.js" }
   ]},
   { group: "(2) 波", units: [
     { id: "wave",       title: "8 波の伝わり方と重ね合わせ", file: null },

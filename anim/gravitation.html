@@ -195,7 +195,7 @@ const escape = {
     const lo = Umin*1.1, hi = Math.max(St.E, 0) + 0.25*(-Umin);
     const X = rr => pl + (rr - 1)/(rmaxPlot - 1)*(gw - pl - pr), Y = u => gh - pb - (u - lo)/(hi - lo)*(gh - pt - pb);
     g.strokeStyle = css("--grid2"); g.beginPath(); g.moveTo(pl, Y(0)); g.lineTo(gw - pr, Y(0)); g.stroke();
-    g.font = uiFont(12); g.fillStyle = ink2; g.textBaseline = "middle"; g.fillText("1 kg あたりのエネルギーと r（1R〜12R）", pl + 4, 10);
+    g.font = uiFont(12); g.fillStyle = ink2; g.textBaseline = "middle"; g.textAlign = "left"; g.fillText("1 kg あたりのエネルギーと r（1R〜12R）", pl + 4, 10);
     g.strokeStyle = css("--hl2"); g.lineWidth = 2.2; g.beginPath(); for(let i = 0; i <= 120; i++){ const rr = 1 + (rmaxPlot - 1)*i/120, u = -GM/(rr*R); i ? g.lineTo(X(rr), Y(u)) : g.moveTo(X(rr), Y(u)); } g.stroke();
     g.strokeStyle = css("--acc"); g.lineWidth = 2; g.beginPath(); g.moveTo(X(1), Y(St.E)); g.lineTo(X(rmaxPlot), Y(St.E)); g.stroke();
     const rr = Math.min(St.r/R, rmaxPlot), u = -GM/St.r;
