@@ -14,13 +14,18 @@ index.html        単元メニュー（トップページ）
 css/style.css     演習ページの見た目（物理基礎ラボと共通＋「微積」タグ・導出の2列比較）
 js/app.js         演習の本体（通常は編集不要。答えは端末に保存、保存キーは physics-lab:）
 js/index.js       単元の一覧（単元を追加したらここに1行書く）
+js/kit.js         単元ファイル用の共通部品（物理量の斜体 Q・ベクトル B・分数 d・微積タグ・定義カード GLOS・2通りの導出 DERIVE2）
 units/            単元ファイル（1単元＝1ファイル）
   TEMPLATE.js     新しい単元のひな形
   plane.js        1 平面内の運動
   rigid.js        2 剛体のつり合い
-anim/             シミュレーター（1ファイルで完結する HTML）
+  momentum.js     3 運動量と力積
+anim/             シミュレーター
+  lab.css         シミュレーター共通の見た目
+  lab-common.js   シミュレーター共通部品（LAB.app でタブ・設定・再生・グラフ・URL 指定を組み立てる）
   plane.html      平面運動ラボ（#proj 放物運動とベクトル／#range 角度と到達距離／#slope 斜面への投射）
   rigid.html      剛体ラボ（#moment 力のモーメント／#balance 重心とてこ／#ladder はしごのつり合い）
+  momentum.html   運動量ラボ（#collide 一直線上の衝突／#merge 平面での合体／#bounce 床ではね返るボール）
 ```
 
 ## 単元のつくり
@@ -35,7 +40,7 @@ anim/             シミュレーター（1ファイルで完結する HTML）
 
 ## 単元を追加する
 
-1. `units/TEMPLATE.js` をコピーして `units/〇〇.js` を作り、問題を書く
+1. `units/TEMPLATE.js` をコピーして（共通部品は `const {Q, B, d, CALC, ...} = window.KIT;` で使える） `units/〇〇.js` を作り、問題を書く
 2. `js/index.js` で、その単元の行の `file: null` を `file: "units/〇〇.js"` にする
 3. ブラウザで開くと、書き方に誤り（answer の範囲外など）があれば、ページの上に「先生向け」の警告が出ます
 
@@ -49,6 +54,7 @@ URL の `#` 以降で、モードと値を指定して開けます。問題文�
 - `anim/plane.html#slope&v0=9.8&al=30`
 - `anim/rigid.html#moment&r=0.5&F=20&phi=60`
 - `anim/rigid.html#ladder&th=60&W=200&w=0&ax=A`
+- `anim/momentum.html#collide&m1=2&m2=1&v1=3&v2=0&e=0.5`
 
 ## 進み具合
 
@@ -56,7 +62,8 @@ URL の `#` 以降で、モードと値を指定して開けます。問題文�
 |---|---|---|---|
 | (1) 様々な運動 | 1 平面内の運動 | ✓ | 平面運動ラボ |
 | | 2 剛体のつり合い | ✓ | 剛体ラボ |
-| | 3 運動量と力積 〜 7 気体分子の運動 | 準備中 | |
+| | 3 運動量と力積 | ✓ | 運動量ラボ |
+| | 4 円運動と慣性力 〜 7 気体分子の運動 | 準備中 | |
 | (2) 波 | 8 〜 10 | 準備中 | |
 | (3) 電気と磁気 | 11 〜 16 | 準備中 | |
 | (4) 原子 | 17 〜 18 | 準備中 | |

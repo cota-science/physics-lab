@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>運動量ラボ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDGothic&family=BIZ+UDPGothic:wght@400;700&display=swap">
+<link rel="stylesheet" href="lab.css">
+<script src="lab-common.js"></script>
+</head>
+<body>
+<script>
+(function(){
+"use strict";
+const {f, S, V, css, prep, arrow, label, symFont, uiFont, numFont, fit, disc, table, graph} = LAB;
+const G = 9.8;
+
+/* ---------- 一直線上の衝突 ---------- */
+function collideModel(P){
+  const vrel = P.v1 - P.v2, w1 = 0.18 + 0.12*Math.sqrt(P.m1), w2 = 0.18 + 0.12*Math.sqrt(P.m2), Lb = 0.22;
+  const ok = vrel > 1e-6, tc = ok ? Math.min(1.0, Math.max(0.4, 1.5/vrel)) : 1.0, tau = ok ? Math.min(0.16, 0.3/vrel) : 0;
+  const Ptot = P.m1*P.v1 + P.m2*P.v2, M = P.m1 + P.m2;
+  const v1p = ok ? (Ptot - P.m2*P.e*vrel)/M : P.v1, v2p = ok ? (Ptot + P.m1*P.e*vrel)/M : P.v2;
+  const J = P.m2*(v2p - P.v2);                                // 2 が受ける力積
+  const x2_0 = 0, x1_0 = -(w1 + w2 + Lb) - (ok ? vrel*tc : 1.2);
+  const g = s => s/2 - tau/(2*Math.PI)*Math.sin(Math.PI*s/tau);  // ∫(1−cos)/2
+  function at(t){
+    if(!ok || t <= tc) return {x1:x1_0 + P.v1*t, x2:x2_0 + P.v2*t, v1:P.v1, v2:P.v2, F:0};
+    const s = Math.min(t - tc, tau), r = t - tc - s;
+    const xa = x1_0 + P.v1*tc + P.v1*s - J/P.m1*g(s), xb = x2_0 + P.v2*tc + P.v2*s + J/P.m2*g(s);
+    const k = (1 - Math.cos(Math.PI*s/tau))/2;
+    const va = P.v1 - J/P.m1*k, vb = P.v2 + J/P.m2*k;
+    const F = s < tau ? J*Math.PI/(2*tau)*Math.sin(Math.PI*s/tau) : 0;
+    return {x1:xa + va*r, x2:xb + vb*r, v1:va, v2:vb, F};
+  }
+  return {ok, tc, tau, v1p, v2p, J, w1, w2, Lb, at, dur: tc + tau + 1.0, Ptot, M, vrel};
+}
+const collide = {
+  label:"一直線上の衝突",
+  params:[["m1","A の質量 "+S("m")+"<sub>A</sub>",0.5,5,0.1,"kg",1,2],["m2","B の質量 "+S("m")+"<sub>B</sub>",0.5,5,0.1,"kg",1,1],
+          ["v1","A の速度 "+S("v")+"<sub>A</sub>（右向き正）",-5,5,0.1,"m/s",1,3],["v2","B の速度 "+S("v")+"<sub>B</sub>",-5,5,0.1,"m/s",1,0],
+          ["e","反発係数 "+S("e"),0,1,0.05,"",2,0.5]],
+  toggles:[["mom","運動量の矢印",true],["cm","重心",false]],
+  timed:true, graphs:4, aspect:"16/7",
+  legend:`<span><i style="background:var(--pos)"></i>A</span><span><i style="background:var(--vel)"></i>B</span><span><i style="background:var(--acc)"></i>和・重心</span><span><i style="background:var(--hl2)"></i>力積（F-t 図の面積）</span>`,
+  reset(P, St){ St.M = collideModel(P); },
+  duration(P, St){ return St.M.dur; },
+  step(){},
+  draw(ctx){
+    const {P, t, T} = ctx, Md = ctx.S.M, q = Md.at(t);
+    const {c, w, h} = prep(ctx.stage);
+    let xmin = 1e9, xmax = -1e9;
+    for(let i = 0; i <= 60; i++){ const r = Md.at(Md.dur*i/60); xmin = Math.min(xmin, r.x1 - Md.w1 - Md.Lb); xmax = Math.max(xmax, r.x2 + Md.w2); }
+    const tf = fit(w, h, {x0:xmin - 0.3, x1:xmax + 0.3, y0:-0.85, y1:1.35}, 10);
+    const ink2 = css("--ink2"), ink3 = css("--ink3"), pos = css("--pos"), vel = css("--vel"), acc = css("--acc");
+    // track
+    c.strokeStyle = ink2; c.lineWidth = 1.5; c.beginPath(); c.moveTo(0, tf.Y(0)); c.lineTo(w, tf.Y(0)); c.stroke();
+    const st = LAB.niceStep(xmax - xmin, 8); c.fillStyle = ink3; c.font = numFont(10); c.textAlign = "center";
+    for(let gx = Math.ceil((xmin-0.3)/st)*st; gx <= xmax + 0.3; gx += st){ c.fillRect(tf.X(gx), tf.Y(0), 1, 5); c.fillText(f(gx, st < 1 ? 1 : 0), tf.X(gx), tf.Y(0) + 16); }
+    // carts
+    const cart = (x, hw, col, name, m, bumper) => {
+      const hgt = 0.18 + 0.1*Math.sqrt(m);
+      c.fillStyle = col; c.globalAlpha = 0.85; c.fillRect(tf.X(x - hw), tf.Y(hgt + 0.06), (2*hw)*tf.s, hgt*tf.s); c.globalAlpha = 1;
+      disc(c, tf.X(x - hw*0.6), tf.Y(0.03), 0.03*tf.s + 2, ink2); disc(c, tf.X(x + hw*0.6), tf.Y(0.03), 0.03*tf.s + 2, ink2);
+      label(c, name, tf.X(x), tf.Y(hgt/2 + 0.06), "#fff", "center", uiFont(12, true)); label(c, `${f(m,1)} kg`, tf.X(x), tf.Y(hgt + 0.06) - 9, col, "center", numFont(11));
+      return hgt;
+    };
+    const ha = cart(q.x1, Md.w1, pos, "A", P.m1), hb = cart(q.x2, Md.w2, vel, "B", P.m2);
+    // bumper spring on A's front
+    const front = q.x1 + Md.w1, end = Math.min(front + Md.Lb, q.x2 - Md.w2), yb = tf.Y(0.06 + Math.min(ha, hb)/2);
+    c.strokeStyle = ink2; c.lineWidth = 1.6; c.beginPath(); c.moveTo(tf.X(front), yb);
+    const nz = 8; for(let i = 1; i <= nz; i++){ const xx = front + (end - front)*i/nz; c.lineTo(tf.X(xx), yb + (i === nz ? 0 : (i % 2 ? -6 : 6))); } c.stroke();
+    // momentum arrows
+    if(T.mom){
+      const k = 0.14;
+      arrow(c, tf.X(q.x1), tf.Y(ha + 0.45), tf.X(q.x1 + P.m1*q.v1*k), tf.Y(ha + 0.45), pos, 3);
+      arrow(c, tf.X(q.x2), tf.Y(hb + 0.45), tf.X(q.x2 + P.m2*q.v2*k), tf.Y(hb + 0.45), vel, 3);
+      label(c, `p_A ＝ ${f(P.m1*q.v1,1)}`, tf.X(q.x1), tf.Y(ha + 0.45) - 13, pos, "center", numFont(11));
+      label(c, `p_B ＝ ${f(P.m2*q.v2,1)}`, tf.X(q.x2), tf.Y(hb + 0.45) - 13, vel, "center", numFont(11));
+      const xc = (P.m1*q.x1 + P.m2*q.x2)/Md.M;
+      arrow(c, tf.X(xc), tf.Y(-0.55), tf.X(xc + Md.Ptot*k), tf.Y(-0.55), acc, 3);
+      label(c, `和 ${f(Md.Ptot,1)} kg·m/s（一定）`, tf.X(xc), tf.Y(-0.75), acc, "center", numFont(11));
+    }
+    if(T.cm){ const xc = (P.m1*q.x1 + P.m2*q.x2)/Md.M; c.strokeStyle = acc; c.setLineDash([4,3]); c.beginPath(); c.moveTo(tf.X(xc), tf.Y(-0.4)); c.lineTo(tf.X(xc), tf.Y(1.2)); c.stroke(); c.setLineDash([]); label(c, "重心", tf.X(xc)+4, tf.Y(1.15), acc); }
+    if(!Md.ok){ ctx.banner("A が B に追いつかない（v_A ≦ v_B）ので衝突しない。A の速度を大きくしよう。", "--neg"); }
+    else if(t < Md.tc) ctx.banner("衝突前", "--ink2");
+    else if(t < Md.tc + Md.tau) ctx.banner("衝突中：A と B は大きさが等しく逆向きの力を及ぼしあう（作用・反作用）", "--hl2");
+    else ctx.banner(`衝突後：e ＝ ${f(P.e,2)}${P.e >= 0.999 ? "（弾性衝突）" : P.e <= 0.001 ? "（完全非弾性：一体になる）" : ""}`, "--acc");
+    // graphs
+    const D = Md.dur;
+    graph(ctx.graphs[0], {title:"x-t", unit:"m", tmax:D, t, series:[{fn:s => Md.at(s).x1, color:"--pos", name:"A"}, {fn:s => Md.at(s).x2, color:"--vel", name:"B"}]});
+    graph(ctx.graphs[1], {title:"v-t", unit:"m/s", tmax:D, t, series:[{fn:s => Md.at(s).v1, color:"--pos", name:"A"}, {fn:s => Md.at(s).v2, color:"--vel", name:"B"}]});
+    graph(ctx.graphs[2], {title:"p-t", unit:"kg·m/s", tmax:D, t, series:[{fn:s => P.m1*Md.at(s).v1, color:"--pos", name:"A"}, {fn:s => P.m2*Md.at(s).v2, color:"--vel", name:"B"}, {fn:() => Md.Ptot, color:"--acc", name:"和"}]});
+    let area = 0; if(Md.ok && t > Md.tc){ const s = Math.min(t - Md.tc, Md.tau); area = Md.J*(1 - Math.cos(Math.PI*s/Md.tau))/2; }
+    graph(ctx.graphs[3], {title:"F-t（B が受ける力）", unit:"N", tmax:D, t, note:`面積 ${f(area,2)} N·s`, series:[{fn:s => Md.at(s).F, color:"--vel", area:true}, {fn:s => -Md.at(s).F, color:"--pos"}]});
+    const K0 = 0.5*P.m1*P.v1**2 + 0.5*P.m2*P.v2**2, K1 = 0.5*P.m1*Md.v1p**2 + 0.5*P.m2*Md.v2p**2;
+    ctx.ro(table([["", "衝突前 → 衝突後"], [`A の速度`, `${f(P.v1,2)} → ${f(Md.v1p,2)} m/s`], [`B の速度`, `${f(P.v2,2)} → ${f(Md.v2p,2)} m/s`],
+      [`運動量の和`, `${f(Md.Ptot,2)} → ${f(P.m1*Md.v1p + P.m2*Md.v2p,2)} kg·m/s`], [`運動エネルギーの和`, `${f(K0,2)} → ${f(K1,2)} J`], [`失われた運動エネルギー`, `${f(K0 - K1,2)} J`], [`B が受けた力積（A は逆向き）`, `${f(Md.J,2)} N·s`]]));
+    ctx.eqs(`<p class="eq">運動量保存：${f(P.m1,1)} × ${f(P.v1,1)} ＋ ${f(P.m2,1)} × ${f(P.v2,1)} ＝ ${f(P.m1,1)}${S("v")}<sub>A</sub>′ ＋ ${f(P.m2,1)}${S("v")}<sub>B</sub>′</p>
+      <p class="eq">反発係数：${S("v")}<sub>B</sub>′ − ${S("v")}<sub>A</sub>′ ＝ ${f(P.e,2)} × (${f(P.v1,1)} − ${f(P.v2,1)})</p>
+      <p class="eq"><span class="tag c">微積</span>力積 ＝ ∫${S("F")}d${S("t")}（F-t 図の紫の面積）＝ B の運動量の変化 ${f(Md.J,2)} N·s。A は同じ大きさで逆向き。</p>`);
+  },
+  asks:[
+    ["質量を等しくし、e ＝ 1 で止まっている B に当てよう。衝突後どうなるか。", "A が止まり、B が A の速さで動き出す（速度が入れかわる）。"],
+    ["F-t 図で、A が受ける力と B が受ける力を比べよう。", "どの瞬間も大きさが等しく逆向き。面積（力積）も等しく逆向きなので、運動量の和は変わらない。"],
+    ["e を 0 にすると、衝突後の2つの台車はどうなるか。失われる運動エネルギーはどうなるか。", "一体になって動く（完全非弾性衝突）。e が小さいほど失われる運動エネルギーが大きく、e ＝ 0 で最大。"],
+    ["「重心」をオンにしよう。衝突の前後で、重心はどんな運動をしているか。", "等速直線運動（速度 ＝ 運動量の和 ÷ 全質量）。衝突しても変わらない。"]
+  ]
+};
+
+/* ---------- 平面での合体 ---------- */
+const merge = {
+  label:"平面での合体",
+  params:[["m1","A の質量",0.5,5,0.1,"kg",1,2],["m2","B の質量",0.5,5,0.1,"kg",1,1],["v1","A の速さ（東向き）",0.5,8,0.1,"m/s",1,3],["v2","B の速さ",0.5,8,0.1,"m/s",1,6],["phi","B の進む向き（東から反時計回り）",0,180,5,"°",0,90]],
+  toggles:[["vec","運動量の矢印の和（図）",true]],
+  timed:true, graphs:0,
+  legend:`<span><i style="background:var(--pos)"></i>A</span><span><i style="background:var(--vel)"></i>B</span><span><i style="background:var(--acc)"></i>一体になった物体</span>`,
+  reset(){}, duration(){ return 2.4; }, step(){},
+  draw(ctx){
+    const {P, t, T} = ctx; const {c, w, h} = prep(ctx.stage);
+    const ph = P.phi*Math.PI/180, p1 = [P.m1*P.v1, 0], p2 = [P.m2*P.v2*Math.cos(ph), P.m2*P.v2*Math.sin(ph)];
+    const M = P.m1 + P.m2, Vx = (p1[0] + p2[0])/M, Vy = (p1[1] + p2[1])/M, tc = 1.0;
+    const posA = s => s < tc ? [P.v1*(s - tc), 0] : [Vx*(s - tc), Vy*(s - tc)];
+    const posB = s => s < tc ? [P.v2*Math.cos(ph)*(s - tc), P.v2*Math.sin(ph)*(s - tc)] : [Vx*(s - tc), Vy*(s - tc)];
+    let b = {x0:-1, x1:1, y0:-1, y1:1};
+    [0, 2.4].forEach(s => [posA(s), posB(s)].forEach(q => { b.x0 = Math.min(b.x0, q[0]); b.x1 = Math.max(b.x1, q[0]); b.y0 = Math.min(b.y0, q[1]); b.y1 = Math.max(b.y1, q[1]); }));
+    const pad = 0.6; const tf = fit(w, h, {x0:b.x0 - pad, x1:b.x1 + pad, y0:b.y0 - pad, y1:b.y1 + pad});
+    const ink3 = css("--ink3"), pos = css("--pos"), vel = css("--vel"), acc = css("--acc");
+    c.strokeStyle = css("--grid"); c.lineWidth = 1; c.beginPath(); c.moveTo(tf.X(b.x0 - pad), tf.Y(0)); c.lineTo(tf.X(b.x1 + pad), tf.Y(0)); c.moveTo(tf.X(0), tf.Y(b.y0 - pad)); c.lineTo(tf.X(0), tf.Y(b.y1 + pad)); c.stroke();
+    label(c, "東 x", tf.X(b.x1 + pad) - 4, tf.Y(0) - 10, ink3, "right"); label(c, "北 y", tf.X(0) + 6, tf.Y(b.y1 + pad) + 10, ink3);
+    // paths
+    const path = (fn, col, s0, s1) => { c.strokeStyle = col; c.globalAlpha = 0.35; c.setLineDash([5,4]); c.lineWidth = 1.5; c.beginPath(); for(let i = 0; i <= 40; i++){ const q = fn(s0 + (s1 - s0)*i/40); i ? c.lineTo(tf.X(q[0]), tf.Y(q[1])) : c.moveTo(tf.X(q[0]), tf.Y(q[1])); } c.stroke(); c.setLineDash([]); c.globalAlpha = 1; };
+    path(posA, pos, 0, tc); path(posB, vel, 0, tc); path(posA, acc, tc, 2.4);
+    const r1 = 7 + 3*Math.sqrt(P.m1), r2 = 7 + 3*Math.sqrt(P.m2);
+    if(t < tc){ const a = posA(t), bb = posB(t); disc(c, tf.X(a[0]), tf.Y(a[1]), r1, pos); disc(c, tf.X(bb[0]), tf.Y(bb[1]), r2, vel);
+      label(c, "A", tf.X(a[0]), tf.Y(a[1]), "#fff", "center", uiFont(11, true)); label(c, "B", tf.X(bb[0]), tf.Y(bb[1]), "#fff", "center", uiFont(11, true));
+      ctx.banner("衝突前", "--ink2"); }
+    else { const a = posA(t); disc(c, tf.X(a[0]), tf.Y(a[1]), 7 + 3*Math.sqrt(M), acc); label(c, "A＋B", tf.X(a[0]), tf.Y(a[1]) - 18 - 3*Math.sqrt(M), acc, "center", uiFont(12, true)); ctx.banner("衝突後：一体になって動く（運動量の和の向きに進む）", "--acc"); }
+    // momentum vector diagram (lower-left inset)
+    if(T.vec){
+      const Pm = Math.max(Math.hypot(p1[0] + p2[0], p1[1] + p2[1]), Math.hypot(...p1), Math.hypot(...p2));
+      const R = Math.min(w, h)*0.28, k = R/Pm, ox = 16 + R*0.15 + (p2[0] < 0 ? -p2[0]*k : 0), oy = h - 18 - (p2[1] < 0 ? 0 : 0);
+      c.fillStyle = css("--surface"); c.globalAlpha = 0.85; c.fillRect(6, h - R - 40, R*1.6 + 30 + (p2[0] < 0 ? -p2[0]*k : 0), R + 34); c.globalAlpha = 1;
+      label(c, "運動量の矢印をつなぐ", 12, h - R - 30, css("--ink2"), "left", uiFont(11));
+      arrow(c, ox, oy, ox + p1[0]*k, oy, pos, 2.6);
+      arrow(c, ox + p1[0]*k, oy, ox + (p1[0] + p2[0])*k, oy - p2[1]*k, vel, 2.6);
+      arrow(c, ox, oy, ox + (p1[0] + p2[0])*k, oy - (p1[1] + p2[1])*k, acc, 3);
+      label(c, "p_A", ox + p1[0]*k/2, oy + 10, pos, "center", numFont(11)); label(c, "p_B", ox + p1[0]*k + p2[0]*k/2 + 6, oy - p2[1]*k/2, vel, "left", numFont(11));
+    }
+    const V = Math.hypot(Vx, Vy), ang = Math.atan2(Vy, Vx)*180/Math.PI;
+    const K0 = 0.5*P.m1*P.v1**2 + 0.5*P.m2*P.v2**2, K1 = 0.5*M*V*V;
+    ctx.ro(table([[`運動量 A（x, y）`, `(${f(p1[0],2)}, 0) kg·m/s`], [`運動量 B（x, y）`, `(${f(p2[0],2)}, ${f(p2[1],2)}) kg·m/s`], [`和（x, y）`, `(${f(p1[0]+p2[0],2)}, ${f(p1[1]+p2[1],2)}) kg·m/s`],
+      [`一体になった後の速度（x, y）`, `(${f(Vx,2)}, ${f(Vy,2)}) m/s`], [`速さ・向き（東から）`, `${f(V,2)} m/s・${f(ang,1)}°`], [`運動エネルギー 前 → 後`, `${f(K0,2)} → ${f(K1,2)} J（${f(K0-K1,2)} J 失われる）`]]));
+    ctx.eqs(`<p class="eq">x 成分：${f(P.m1,1)} × ${f(P.v1,1)} ＋ ${f(P.m2,1)} × ${f(P.v2,1)} cos ${P.phi}° ＝ ${f(M,1)}${S("V")}<sub>x</sub></p><p class="eq">y 成分：${f(P.m2,1)} × ${f(P.v2,1)} sin ${P.phi}° ＝ ${f(M,1)}${S("V")}<sub>y</sub></p>`);
+  },
+  asks:[
+    ["B の向きを 180°（正面衝突）にして、A と B の運動量の大きさを等しくしよう。一体になった後はどうなるか。", "止まる。運動量の和が 0 なので。運動エネルギーはすべて失われる。"],
+    ["左下の図で、合体後の運動量の矢印は何を表しているか。", "A と B の運動量の矢印の和。合体後の速度は、この矢印を全質量で割ったもの。"],
+    ["速さを平均して「(3 ＋ 6)/2 ＝ 4.5 m/s」とするのはなぜ誤りか。", "向きが違う速度は足せないし、質量の重みも入っていないから。運動量（ベクトル）を足して全質量で割る。"]
+  ]
+};
+
+/* ---------- 床ではね返るボール ---------- */
+const bounce = {
+  label:"床ではね返るボール",
+  params:[["h","落とす高さ "+S("h"),0.5,3,0.1,"m",1,2],["e","床との反発係数 "+S("e"),0,1,0.05,"",2,0.7]],
+  timed:true, graphs:2, dt:1/1000,
+  legend:`<span><i style="background:var(--pos)"></i>高さ</span><span><i style="background:var(--vel)"></i>速度（上向き正）</span>`,
+  reset(P, St){ St.y = P.h; St.v = 0; St.trace = [[0, P.h, 0]]; St.peaks = []; St.rising = false; St.lastSample = 0; },
+  duration(P){ const t0 = Math.sqrt(2*P.h/G); return Math.min(P.e < 1 ? t0*(1 + 2*P.e/(1 - P.e)) + 0.3 : 8, 8); },
+  step(P, St, dt, t){
+    St.v -= G*dt; St.y += St.v*dt;
+    if(St.y <= 0 && St.v < 0){ St.y = 0; St.v = -P.e*St.v; if(St.v < 0.05) St.v = 0; St.rising = true; }
+    if(St.rising && St.v <= 0 && St.y > 0.001){ St.peaks.push(St.y); St.rising = false; }
+    if(St.v === 0 && St.y === 0){ St.v = 0; St.y = 0; }
+    if(t + dt - St.lastSample >= 0.01){ St.trace.push([t + dt, St.y, St.v]); St.lastSample = t + dt; }
+  },
+  draw(ctx){
+    const {P, S:St, t} = ctx; const {c, w, h} = prep(ctx.stage);
+    const tf = fit(w, h, {x0:-1.6, x1:1.6, y0:-0.2, y1:P.h + 0.3});
+    const ink2 = css("--ink2"), ink3 = css("--ink3"), pos = css("--pos"), vel = css("--vel");
+    c.fillStyle = css("--ground"); c.globalAlpha = 0.5; c.fillRect(0, tf.Y(0), w, 10); c.globalAlpha = 1;
+    c.strokeStyle = ink2; c.beginPath(); c.moveTo(0, tf.Y(0)); c.lineTo(w, tf.Y(0)); c.stroke();
+    // theoretical bounce heights
+    for(let n = 0; n < 6; n++){ const hn = P.h*Math.pow(P.e, 2*n); if(hn < 0.02) break;
+      c.strokeStyle = ink3; c.setLineDash([3,4]); c.beginPath(); c.moveTo(tf.X(-1.2), tf.Y(hn)); c.lineTo(tf.X(1.2), tf.Y(hn)); c.stroke(); c.setLineDash([]);
+      label(c, n === 0 ? `h ＝ ${f(hn,2)} m` : `e^${2*n}h ＝ ${f(hn,2)} m`, tf.X(1.25), tf.Y(hn), ink3, "left", numFont(10)); }
+    const r = 0.1*tf.s + 4; disc(c, tf.X(0), tf.Y(St.y) - r, r, pos);
+    arrow(c, tf.X(0) - r - 8, tf.Y(St.y) - r, tf.X(0) - r - 8, tf.Y(St.y) - r - St.v*0.08*tf.s, vel, 2.6);
+    const D = ctx.dur, tr = St.trace;
+    graph(ctx.graphs[0], {title:"y-t", unit:"m", tmax:D, t, ylo:0, yhi:P.h*1.1, series:[{pts:tr.map(p => [p[0], p[1]]), color:"--pos"}]});
+    const v0 = Math.sqrt(2*G*P.h);
+    graph(ctx.graphs[1], {title:"v-t（上向き正）", unit:"m/s", tmax:D, t, ylo:-v0*1.1, yhi:v0*1.1, series:[{pts:tr.map(p => [p[0], p[2]]), color:"--vel"}]});
+    const t0 = Math.sqrt(2*P.h/G);
+    ctx.ro(table([[`床に当たる直前の速さ`, `${f(v0,2)} m/s`], [`はね返った直後の速さ（e 倍）`, `${f(P.e*v0,2)} m/s`], [`1回目にはね上がる高さ e²h`, `${f(P.e*P.e*P.h,3)} m`], [`2回目 e⁴h`, `${f(Math.pow(P.e,4)*P.h,3)} m`],
+      [`止まるまでの時間（理論）`, P.e < 1 ? `${f(t0*(1 + 2*P.e/(1 - P.e)),2)} s` : "止まらない"]]));
+    ctx.eqs(`<p class="eq">はね返り：${S("v")}′ ＝ −${S("e")}${S("v")}　高さ：${S("h")}′ ＝ ${S("e")}²${S("h")}（速さの2乗に比例）</p><p class="eq">ボールの運動量は床から受ける力積で向きが変わる（外力があるので保存しない）。</p>
+      <p class="eq">止まるまでの時間：${S("t")}<sub>0</sub>(1 ＋ 2${S("e")} ＋ 2${S("e")}² ＋ …) ＝ ${S("t")}<sub>0</sub>(1 ＋ 2${S("e")}/(1 − ${S("e")}))（無限等比級数、${S("t")}<sub>0</sub> ＝ √(2${S("h")}/${S("g")})）</p>`);
+    ctx.banner(St.peaks.length ? `測定した高さ：${St.peaks.slice(0,4).map(x => f(x,2)).join(" → ")} m` : "", "--pos");
+  },
+  asks:[
+    ["e ＝ 0.50 にしよう。1回目にはね上がる高さは、落とした高さの何倍か。", "e² ＝ 0.25 倍。速さが ½ 倍なので、高さは ¼ 倍。"],
+    ["v-t グラフで、床にぶつかる瞬間の速度の変化を見よう。何を表しているか。", "一瞬で負から正に変わる。床から上向きの大きな力積を受けた（運動量の変化 ＝ 力積）。"],
+    ["回数は無限なのに、ボールが有限の時間で止まるのはなぜか。", "はね返るたびに滞空時間が e 倍になり、無限等比級数の和が有限になるから。"]
+  ]
+};
+
+LAB.app({title:"運動量ラボ", modes:{collide, merge, bounce}});
+})();
+</script>
+</body>
+</html>
