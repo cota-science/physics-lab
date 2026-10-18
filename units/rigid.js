@@ -125,7 +125,7 @@ const UNITQ = ["N", "N·m", "N/m", "m", "kg·m", "単位なし"];
 
 const SECTIONS = [
 { id:"def", advice:"「うでの長さは作用線までの距離」「つり合いの条件は2つ」を定義カードで確かめよう。", tab:"①定義", title:"① 定義カード",
-  intro:`物理基礎では物体を「点」として扱い、力のつり合いだけを考えました。大きさのある物体（剛体）では、<b>回転</b>も考える必要があります。<br>シミュレーターで確かめよう：<br>${ANIM("anim/rigid.html#moment","力のモーメントとうでの長さ")}${ANIM("anim/rigid.html#balance","重心とてこ")}${ANIM("anim/rigid.html#ladder","はしごのつり合い")}${ANIM(BASICLAB+"anim/balance.html","力のつり合い（物理基礎ラボ）")}`,
+  intro:`物理基礎では物体を「点」として扱い、力のつり合いだけを考えました。大きさのある物体（剛体）では、<b>回転</b>も考える必要があります。<br>シミュレーターで確かめよう：<br>${ANIM("anim/rigid.html#moment","力のモーメントとうでの長さ")}${ANIM("anim/rigid.html#balance","重心とてこ")}${ANIM("anim/rigid.html#ladder","はしごのつり合い")}${ANIM("anim/rigid.html#tip","箱の転倒（倒れる・すべる）")}${ANIM(BASICLAB+"anim/balance.html","力のつり合い（物理基礎ラボ）")}`,
   ref:{label:"定義カードと導出を見る", html:DEF_TABLE + DERIVE},
   groups:[
   { title:"A. 力のモーメント", qs:[
@@ -164,7 +164,7 @@ const SECTIONS = [
      explain:`Σ${m}<sub>i</sub>${x}<sub>i</sub> ÷ Σ${m}<sub>i</sub> の和を積分にしたもの。分母 ∫${lam}d${x} は棒の質量です。3つ目は一様な棒のときだけ正しい式です。`},
     {id:"d10",type:"choice",prompt:"床に置いた物体が倒れないための条件として正しいものはどれか。",
      options:["重心を通る鉛直線が、床と接している面（底面）の内側を通る","重心が底面より低い位置にある","重心が物体の中心にある"],answer:0,
-     explain:"重心を通る鉛直線が底面の外に出ると、重力のモーメントが物体を倒す向きにはたらきます。底面の端が回転軸になると考えます。"}
+     explain:`重心を通る鉛直線が底面の外に出ると、重力のモーメントが物体を倒す向きにはたらきます。底面の端が回転軸になると考えます。${ANIM("anim/rigid.html#tip&sc=slope","斜面の箱で確かめる")}`}
   ]}]
 },
 { id:"read", advice:"力を作用線ごと図にかき、軸から作用線への垂線（うでの長さ）を書き込もう。", tab:"②読解", title:"② 読解ドリル",
@@ -290,7 +290,7 @@ const SECTIONS = [
      options:["大きくなる（0.50）","小さくなる","変わらない"],answer:0,
      explain:`1/(2 tan 45°) ＝ 0.50。寝かせるほど重力のうでが長く、壁の垂直抗力のうでが短くなるので、大きな N<sub>B</sub>（＝ f）が必要です。${ANIM("anim/rigid.html#ladder&th=45&w=0&W=200","45° で確かめる")}`}
   ]},
-  { title:"問題3（重心と倒れる条件・答えだけ入力）", lead:`紙に7ステップを書いて解き、答えを入力せよ。${ANIM("anim/rigid.html#balance","重心とてこ")}`,
+  { title:"問題3（重心と倒れる条件・答えだけ入力）", lead:`紙に7ステップを書いて解き、答えを入力せよ。${ANIM("anim/rigid.html#balance","重心とてこ")}${ANIM("anim/rigid.html#tip&sc=slope&a=0.4&b=0.8&mu=0.6","箱の転倒（(c) の値）")}`,
     quote:"(a) 1辺 0.60 m の正方形の一様な薄い板から、1つの角を含む1辺 0.30 m の正方形を切り取った（右上の角を切り取る）。左下の角を原点、右向きを x 軸とする。(b) 長さ 2.0 m の棒の線密度が、端 A からの距離 x〔m〕を使って λ ＝ 1.0 ＋ 0.50x〔kg/m〕と表される。(c) 高さ 0.80 m、幅 0.40 m の一様な直方体をあらい板にのせ、板を少しずつ傾ける（すべらないとする）。", qs:[
     {id:"s31",type:"num",prompt:"(a) 残った板の重心の x 座標",answer:0.25,tol:0.005,unit:"m",
      traps:{"0.3":"切り取る前の重心です。切り取った部分の分だけ左に寄ります。","0.225":"面積で重みづけします。切り取った部分（面積 0.09 m²、重心 x ＝ 0.45 m）を「負の質量」として引きます。"},

@@ -100,6 +100,7 @@ details.ask summary{cursor:pointer;font-weight:700;color:var(--ui)}
   <button role="tab" data-mode="moment">力のモーメント</button>
   <button role="tab" data-mode="balance">重心とてこ</button>
   <button role="tab" data-mode="ladder">はしごのつり合い</button>
+  <button role="tab" data-mode="tip">箱の転倒</button>
 </nav>
 
 <div class="grid">
@@ -137,7 +138,8 @@ const $ = id => document.getElementById(id);
 const DEF = {
   moment:{r:0.5, F:20, phi:60, s:0},
   balance:{mr:1.0, k:0, m1:1.0, x1:0.1, m2:0.5, x2:0.9, xp:0.5},
-  ladder:{th:60, W:200, w:0, p:0.5, mu:0.4, ax:"A"}
+  ladder:{th:60, W:200, w:0, p:0.5, mu:0.4, ax:"A"},
+  tip:{sc:"push", a:0.4, b:0.8, m:20, mu:0.6, h:0.6, F:0, th:0}
 };
 let mode = "moment";
 const P = {};
@@ -190,29 +192,39 @@ const CTRLS = {
   balance:[["mr","棒の質量",0,2,0.1,"kg",1],["k","密度のかたより "+S("k")+"（λ ∝ 1 ＋ "+S("k")+S("x")+"）",0,5,0.1,"",1],["m1","おもり1の質量",0,2,0.1,"kg",1],["x1","おもり1の位置",0,1,0.01,"m",2],["m2","おもり2の質量",0,2,0.1,"kg",1],["x2","おもり2の位置",0,1,0.01,"m",2],["xp","支点の位置",0,1,0.01,"m",2]],
   ladder:[["th","床とはしごのなす角 "+S("θ"),20,85,1,"°",0],["W","はしごの重さ",50,400,10,"N",0],["w","人の重さ",0,800,10,"N",0],["p","人の位置（A からはしごの長さの何割）",0,1,0.01,"",2],["mu","床の静止摩擦係数 "+S("μ"),0,1,0.01,"",2]]
 };
+const TIP_CTRLS = {
+  push:[["a","箱の幅 "+S("a"),0.1,1.2,0.05,"m",2],["b","箱の高さ "+S("b"),0.2,1.5,0.05,"m",2],["m","質量 "+S("m"),5,50,1,"kg",0],["mu","静止摩擦係数 "+S("μ"),0.05,1,0.01,"",2],["h","押す高さ "+S("h")+"（高さ b まで）",0.05,1.5,0.05,"m",2],["F","押す力 "+S("F"),0,400,1,"N",0]],
+  slope:[["a","箱の幅 "+S("a"),0.1,1.2,0.05,"m",2],["b","箱の高さ "+S("b"),0.2,1.5,0.05,"m",2],["m","質量 "+S("m"),5,50,1,"kg",0],["mu","静止摩擦係数 "+S("μ"),0.05,1,0.01,"",2],["th","斜面の傾き "+S("θ"),0,60,0.5,"°",1]]
+};
+const ctrlList = () => mode === "tip" ? TIP_CTRLS[P.sc === "slope" ? "slope" : "push"] : CTRLS[mode];
 const TOGGLES = {
   moment:[["arm","うでの長さ"],["comp","力の分解（棒に平行・垂直）"],["line","作用線"]],
-  balance:[], ladder:[]
+  balance:[], ladder:[], tip:[]
 };
 function buildControls(){
-  $("ctrls").innerHTML = CTRLS[mode].map(([k, lab, mn, mx, st]) =>
+  $("ctrls").innerHTML = (mode === "tip" ? `<div class="ctrl"><label for="c-sc"><span>場面</span></label><select id="c-sc"><option value="push">床の上の箱を横から押す</option><option value="slope">斜面に置いた箱（斜面を傾ける）</option></select></div><div class="ctrl"><label><span>動かして確かめる</span></label><div style="display:flex;gap:8px"><button class="btn" type="button" id="tipGo">▶</button><button class="btn ghost" type="button" id="tipBack" aria-label="もとにもどす">⟲</button></div></div>` : "") + ctrlList().map(([k, lab, mn, mx, st]) =>
     `<div class="ctrl"><label for="c-${k}"><span>${lab}</span><span class="num" id="v-${k}"></span></label><input type="range" id="c-${k}" data-k="${k}" min="${mn}" max="${mx}" step="${st}"></div>`).join("")
     + (mode === "ladder" ? `<div class="ctrl"><label for="c-ax"><span>モーメントを考える点</span></label><select id="c-ax"><option value="A">A（床との接点）</option><option value="B">B（壁との接点）</option><option value="G">G（重心）</option></select></div>` : "")
     + (mode === "balance" ? `<div class="ctrl"><label><span>支点を重心に</span></label><button class="btn ghost" type="button" id="toG">支点を重心の位置へ</button></div>` : "");
   $("toggles").innerHTML = TOGGLES[mode].map(([k, lab]) => `<label><input type="checkbox" data-t="${k}" ${SHOW[k] ? "checked" : ""}>${lab}</label>`).join("");
   $("ctrls").querySelectorAll("input[type=range]").forEach(inp => inp.addEventListener("input", e => { P[e.target.dataset.k] = +e.target.value; update(); }));
   $("toggles").querySelectorAll("input").forEach(inp => inp.addEventListener("change", e => { SHOW[e.target.dataset.t] = e.target.checked; draw(); }));
+  if($("c-sc")) $("c-sc").addEventListener("change", e => { P.sc = e.target.value; buildControls(); renderAsks(); update(); });
+  if($("tipGo")) $("tipGo").addEventListener("click", () => tipStart());
+  if($("tipBack")) $("tipBack").addEventListener("click", () => { tipReset(); update(); });
   if($("c-ax")) $("c-ax").addEventListener("change", e => { P.ax = e.target.value; update(); });
   if($("toG")) $("toG").addEventListener("click", () => { P.xp = Math.round(balanceData().xG*100)/100; update(); });
   const lg = {
     moment:`<span><i style="background:var(--vel)"></i>力 ${S("F")}</span><span><i style="background:var(--hl2)"></i>うでの長さ ${S("l")}</span><span><i style="background:var(--ink3)"></i>作用線</span>`,
     balance:`<span><i style="background:var(--vel)"></i>おもりの重さ</span><span><i style="background:var(--acc)"></i>全体の重力（重心 G）</span><span><i style="background:var(--pos)"></i>支点の力</span>`,
+    tip:`<span><i style="background:var(--acc)"></i>重力 mg（点線は作用線）</span><span><i style="background:var(--pos)"></i>垂直抗力 N（作用点が動く）</span><span><i style="background:var(--hl2)"></i>摩擦力 f</span><span><i style="background:var(--vel)"></i>押す力 F</span>`,
     ladder:`<span><i style="background:var(--acc)"></i>重力 W（はしご）・w（人）</span><span><i style="background:var(--vel)"></i>壁の垂直抗力 N<sub>B</sub></span><span><i style="background:var(--pos)"></i>床の垂直抗力 N<sub>A</sub></span><span><i style="background:var(--hl2)"></i>床の摩擦力 f</span>`
   };
   $("legend").innerHTML = lg[mode];
 }
 function syncControls(){
-  CTRLS[mode].forEach(([k, , , , , u, d]) => { const el = $("c-"+k); if(el){ el.value = P[k]; } const v = $("v-"+k); if(v) v.textContent = `${f(P[k], d)}${u ? " "+u : ""}`.replace(" °","°"); });
+  if($("c-sc")) $("c-sc").value = P.sc;
+  ctrlList().forEach(([k, , , , , u, d]) => { const el = $("c-"+k); if(el){ el.value = P[k]; } const v = $("v-"+k); if(v) v.textContent = `${f(P[k], d)}${u ? " "+u : ""}`.replace(" °","°"); });
   if($("c-ax")) $("c-ax").value = P.ax;
   document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.mode === mode));
 }
@@ -400,9 +412,154 @@ function drawLadder(){
   <p class="eq">人がいないとき、必要な μ ＝ 1/(2 tan ${S("θ")}) ＝ <b>${f(1/(2*Math.tan(D.th)),3)}</b></p>`;
 }
 
+/* ---------- tip（箱の転倒とすべり） ---------- */
+/* 「土台の座標」：底面にそって前（倒れる向き・すべる向き）を +u、底面に垂直に +v。
+   床を押すときは θ ＝ 0、斜面では土台が θ だけ傾き、+u が斜面の下向き。 */
+const GG = 9.8;
+const TIP = {phase:"static", q:0, phi:0, om:0, sx:0, sv:0, ev:null, last:null};
+const isPush = () => P.sc !== "slope";
+function tipData(Fq, thq){
+  const F = isPush() ? Fq : 0, th = (isPush() ? 0 : thq)*Math.PI/180, a = P.a, b = P.b, h = Math.min(P.h, b), m = P.m;
+  const W = m*GG, N = W*Math.cos(th), fneed = F + W*Math.sin(th), fmax = P.mu*N;
+  const Mtip = F*h + W*Math.sin(th)*b/2, Mrest = N*a/2;            // 前の下の辺のまわり：倒す向き・もどす向き
+  const d = N > 0 ? Mtip/N : 0;                                       // 垂直抗力の作用点（底面の中心から前へ）
+  const Fs = P.mu*W, Ft = W*a/(2*h);                                  // 押す：すべり出す力・倒れはじめる力
+  const ths = Math.atan(P.mu)*180/Math.PI, tht = Math.atan(a/b)*180/Math.PI;  // 斜面：すべり出す角・倒れはじめる角
+  return {F, th, a, b, h, m, W, N, fneed, fmax, Mtip, Mrest, d, Fs, Ft, ths, tht, slide: fneed > fmax + 1e-9, tip: d > a/2 + 1e-9};
+}
+function tipLimits(){ const D = tipData(0, 0); return isPush() ? {qs:D.Fs, qt:D.Ft, qmax:Math.max(400, 1.3*Math.max(Math.min(D.Fs, D.Ft), 1))} : {qs:D.ths, qt:D.tht, qmax:90}; }
+function tipQ(){ return TIP.phase === "static" ? (isPush() ? P.F : P.th) : TIP.q; }
+function tipReset(){ TIP.phase = "static"; TIP.phi = 0; TIP.om = 0; TIP.sx = 0; TIP.sv = 0; TIP.ev = null; TIP.last = null; }
+function tipStart(){
+  const L = tipLimits(), q0 = isPush() ? P.F : P.th, first = Math.min(L.qs, L.qt);
+  tipReset(); TIP.q = q0;
+  if(q0 >= first){ TIP.ev = L.qt <= L.qs ? "tip" : "slide"; TIP.phase = TIP.ev; }
+  else { TIP.phase = "ramp"; TIP.rate = Math.max((first - q0)/3, 0.5); }
+  TIP.last = null; requestAnimationFrame(tipLoop);
+}
+function tipStep(dt){
+  const L = tipLimits();
+  if(TIP.phase === "ramp"){
+    TIP.q += TIP.rate*dt; const first = Math.min(L.qs, L.qt);
+    if(TIP.q >= first){ TIP.q = first*1.01 + (isPush() ? 0.5 : 0.1); TIP.ev = L.qt <= L.qs ? "tip" : "slide"; TIP.phase = TIP.ev; }
+    return;
+  }
+  const D = tipData(TIP.q, TIP.q);
+  if(TIP.phase === "tip"){
+    // 前の下の辺のまわりの回転（時計回りが正）。重力と押す力のモーメントだけ。
+    const I = D.m*(D.a*D.a + D.b*D.b)/3, c = Math.cos(TIP.phi), s = Math.sin(TIP.phi);
+    const rot = (x, y) => [x*c + y*s, -x*s + y*c];
+    const g = rot(-D.a/2, D.b/2), p = rot(-D.a, D.h), gF = [D.W*Math.sin(D.th), -D.W*Math.cos(D.th)];
+    const tau = -(g[0]*gF[1] - g[1]*gF[0]) - (p[0]*0 - p[1]*D.F);
+    TIP.om += tau/I*dt; TIP.phi += TIP.om*dt;
+    if(TIP.phi >= Math.PI/2){ TIP.phi = Math.PI/2; TIP.phase = "done"; }
+    if(TIP.phi < 0){ TIP.phi = 0; TIP.phase = "done"; }
+  } else if(TIP.phase === "slide"){
+    const acc = (D.fneed - 0.8*P.mu*D.N)/D.m;   // 動摩擦係数は静止摩擦係数の 0.8 倍とする TIP.sv += acc*dt; TIP.sx += TIP.sv*dt;
+    if(TIP.sx > (isPush() ? 1.6 : 1.4 - D.a/2 - 0.05)){ TIP.phase = "done"; }
+  }
+}
+function tipLoop(ts){
+  if(mode !== "tip" || !["ramp","tip","slide"].includes(TIP.phase)) return;
+  if(TIP.last != null){ const dt = Math.min((ts - TIP.last)/1000, 0.05); for(let i = 0; i < 8; i++) tipStep(dt/8); }
+  TIP.last = ts;
+  const k = isPush() ? "F" : "th", el = $("v-"+k), inp = $("c-"+k);
+  if(TIP.phase === "ramp" && el){ el.textContent = isPush() ? `${f(TIP.q,0)} N` : `${f(TIP.q,1)}°`; if(inp) inp.value = TIP.q; }
+  drawTip();
+  if(["ramp","tip","slide"].includes(TIP.phase)) requestAnimationFrame(tipLoop);
+}
+function drawTip(){
+  const {c, w, h} = prep($("stage"));
+  const ink2 = css("--ink2"), ink3 = css("--ink3"), neg = css("--neg");
+  const q = tipQ(), D = tipData(q, q), L = tipLimits(), push = isPush();
+  const ex = [Math.cos(D.th), -Math.sin(D.th)], ey = [Math.sin(D.th), Math.cos(D.th)];
+  const Lb = 1.4;                                          // 斜面の板の長さの半分
+  const Ob = push ? [0, 0] : [Lb - Lb*ex[0], -Lb*ex[1]];
+  const Wd = (u, v) => [Ob[0] + u*ex[0] + v*ey[0], Ob[1] + u*ex[1] + v*ey[1]];
+  const bnd = push ? {x0:-1.3, x1:2.3, y0:-0.3, y1:Math.max(P.b, P.a) + 0.35} : {x0:-Lb - 0.2, x1:Lb + 0.4, y0:-0.3, y1:2*Lb*Math.sin(Math.min(60, Math.max(L.qt, L.qs) + 8)*Math.PI/180) + Math.max(P.a, P.b)*0.6 + 0.3};
+  const barH = 70, t = fit(w, h - barH, bnd, 14), X = p => t.X(p[0]), Y = p => t.Y(p[1]);
+  // 床・斜面
+  c.strokeStyle = ink2; c.lineWidth = 2;
+  if(push){ c.beginPath(); c.moveTo(t.X(bnd.x0), t.Y(0)); c.lineTo(t.X(bnd.x1), t.Y(0)); c.stroke(); }
+  else {
+    const a0 = Wd(-Lb, 0), a1 = Wd(Lb, 0);
+    c.fillStyle = css("--ground"); c.globalAlpha = 0.35; c.beginPath(); c.moveTo(X(a0), Y(a0)); c.lineTo(X(a1), Y(a1)); c.lineTo(X([a0[0], 0]), Y([a0[0], 0])); c.closePath(); c.fill(); c.globalAlpha = 1;
+    c.beginPath(); c.moveTo(X(a0), Y(a0)); c.lineTo(X(a1), Y(a1)); c.stroke();
+    c.beginPath(); c.moveTo(t.X(bnd.x0), t.Y(0)); c.lineTo(t.X(bnd.x1), t.Y(0)); c.stroke();
+    c.lineWidth = 1.2; c.beginPath(); c.arc(X(a1), Y(a1), 34, Math.PI, Math.PI + D.th); c.stroke();
+    label(c, `${f(q,1)}°`, X(a1) - 40, Y(a1) - 12, ink2, "right");
+  }
+  // 箱：前の下の辺（回転の軸）を基準に
+  const piv = [D.a/2 + TIP.sx, 0], cph = Math.cos(TIP.phi), sph = Math.sin(TIP.phi);
+  const B = (x, y) => { const xr = x*cph + y*sph, yr = -x*sph + y*cph; return Wd(piv[0] + xr, piv[1] + yr); };   // 軸から見た箱の点 → 世界
+  const corners = [B(0,0), B(-D.a,0), B(-D.a,D.b), B(0,D.b)];
+  c.fillStyle = css("--ui-soft"); c.strokeStyle = css("--ui"); c.lineWidth = 2; c.beginPath(); corners.forEach((p, i) => i ? c.lineTo(X(p), Y(p)) : c.moveTo(X(p), Y(p))); c.closePath(); c.fill(); c.stroke();
+  const G = B(-D.a/2, D.b/2), Gx = X(G), Gy = Y(G);
+  c.fillStyle = ink2; c.beginPath(); c.arc(Gx, Gy, 4, 0, 7); c.fill(); label(c, "G", Gx - 7, Gy - 10, ink2, "right", `bold 13px ${css("--f-ui")}`);
+  // 重力の作用線（鉛直）と、底面との交点
+  c.strokeStyle = css("--acc"); c.lineWidth = 1.2; c.setLineDash([4,4]); const sd = ((G[0]-Ob[0])*ey[0] + (G[1]-Ob[1])*ey[1])/Math.cos(D.th) + 0.15; c.beginPath(); c.moveTo(Gx, Gy); c.lineTo(Gx, t.Y(G[1] - sd)); c.stroke(); c.setLineDash([]);
+  // 回転の軸（前の下の辺）
+  const Pv = B(0, 0); c.strokeStyle = neg; c.lineWidth = 2; c.beginPath(); c.arc(X(Pv), Y(Pv), 7, 0, 7); c.stroke();
+  if(TIP.phase !== "slide" && TIP.phase !== "done" || TIP.ev === "tip") label(c, "回転の軸", X(Pv) + 9, Y(Pv) + 14, neg, "left", `12px ${css("--f-ui")}`);
+  // 力（静止またはゆっくり増やしている間）
+  const still = TIP.phase === "static" || TIP.phase === "ramp";
+  const k = 0.4*Math.max(D.b, 0.5)/Math.max(D.W, D.F, 1);
+  const fa = (p, F, col, txt, al) => { const e = [p[0] + F[0]*k, p[1] + F[1]*k]; arrow(c, X(p), Y(p), X(e), Y(e), css(col), 3); label(c, txt, X(e) + (al === "right" ? -6 : 6), Y(e), css(col), al || "left", `12px ${css("--f-ui")}`); };
+  fa(G, [0, -D.W], "--acc", `mg ${f(D.W,0)} N`, "left");
+  if(push && D.F > 0 && TIP.phase !== "done"){ const pF = B(-D.a, D.h), s0 = [pF[0] - D.F*k, pF[1]]; arrow(c, X(s0), Y(s0), X(pF), Y(pF), css("--vel"), 3); label(c, `F ${f(D.F,0)} N`, X(s0) - 6, Y(s0), css("--vel"), "right", `12px ${css("--f-ui")}`); }
+  if(still){
+    const dd = Math.min(D.d, D.a/2), pN = Wd(dd + TIP.sx, 0), pf = Wd(TIP.sx, 0);
+    fa(pN, [D.N*ey[0], D.N*ey[1]], "--pos", `N ${f(D.N,0)} N`, "left");
+    const fr = Math.min(D.fneed, D.fmax); if(fr > 0.5) fa(pf, [-fr*ex[0], -fr*ex[1]], "--hl2", `f ${f(fr,0)} N`, "right");
+    // 作用点の位置の目盛り
+    const pc = Wd(TIP.sx, 0), pe = Wd(D.a/2 + TIP.sx, 0);
+    c.fillStyle = css("--pos"); c.beginPath(); c.arc(X(pN), Y(pN), 4, 0, 7); c.fill();
+    c.strokeStyle = ink3; c.lineWidth = 1; c.beginPath(); c.moveTo(X(pc), Y(pc)); c.lineTo(X(Wd(TIP.sx, -0.12)), Y(Wd(TIP.sx, -0.12))); c.stroke();
+  }
+  // 結果
+  const msg = {
+    static: D.tip && D.slide ? "このままでは静止できない（倒れる条件もすべる条件も満たす）" : D.tip ? "このままでは静止できない：倒れる" : D.slide ? "このままでは静止できない：すべる" : `静止できる：N の作用点は中心から前へ ${f(D.d*100,1)} cm（端まで ${f(D.a*50,1)} cm）`,
+    ramp: push ? "押す力をだんだん強くしている…" : "斜面をだんだん傾けている…",
+    tip: "倒れはじめた：N の作用点が前の辺に達し、重力のモーメントが支えきれない",
+    slide: "すべりはじめた：必要な摩擦力が最大摩擦力 μN を超えた（動摩擦係数は μ の 0.8 倍とした）",
+    done: TIP.ev === "tip" ? "倒れた（すべるより先に倒れる条件になった）" : "すべった（倒れるより先にすべる条件になった）"
+  }[TIP.phase];
+  $("banner").textContent = msg; $("banner").style.color = TIP.phase === "static" && !D.tip && !D.slide ? css("--acc") : TIP.phase === "ramp" ? css("--ui") : neg;
+  // 下の数直線：すべり出す値・倒れはじめる値
+  const y0 = h - barH + 30, xl = 16, xr = w - 16, sc = v => xl + (xr - xl)*Math.min(v, L.qmax)/L.qmax;
+  c.strokeStyle = ink2; c.lineWidth = 1.5; c.beginPath(); c.moveTo(xl, y0); c.lineTo(xr, y0); c.stroke();
+  label(c, push ? `押す力 F〔N〕（▼ がいまの値）` : `傾きの角 θ〔°〕（▼ がいまの値）`, xl, y0 - 22, ink2, "left", `12px ${css("--f-ui")}`);
+  label(c, push ? `${f(L.qmax,0)}` : "90", xr, y0 - 9, ink3, "right", `11px ${css("--f-num")}`);
+  const xt = sc(L.qt), xs = sc(L.qs), close = Math.abs(xt - xs) < 90;
+  const mark = (x, col, txt, row) => { c.strokeStyle = col; c.lineWidth = 2; c.beginPath(); c.moveTo(x, y0 - 6); c.lineTo(x, y0 + 6); c.stroke(); label(c, txt, Math.min(Math.max(x, xl + 46), xr - 46), y0 + 14 + 14*row, col, "center", `bold 11px ${css("--f-ui")}`); };
+  mark(xt, neg, `倒れる ${push ? f(L.qt,0) + " N" : f(L.qt,1) + "°"}`, 0); mark(xs, css("--hl2"), `すべる ${push ? f(L.qs,0) + " N" : f(L.qs,1) + "°"}`, close ? 1 : 0);
+  const xq = sc(q); c.fillStyle = css("--ui"); c.beginPath(); c.moveTo(xq, y0 - 2); c.lineTo(xq - 6, y0 - 12); c.lineTo(xq + 6, y0 - 12); c.closePath(); c.fill();
+  // 数値と式
+  $("ro").innerHTML = table([
+    ["重さ mg・垂直抗力 N", `${f(D.W,0)} N・${f(D.N,0)} N`],
+    ["必要な摩擦力 f・最大摩擦力 μN", `${f(D.fneed,1)} N・${f(D.fmax,1)} N`],
+    ["前の辺のまわり：倒す向きのモーメント", `${f(D.Mtip,1)} N·m`],
+    ["前の辺のまわり：もどす向き（N が中心にあるとき）N·a/2", `${f(D.Mrest,1)} N·m`],
+    ["N の作用点（中心から前へ）d ／ 端 a/2", `${f(D.d,3)} m ／ ${f(D.a/2,3)} m`],
+    push ? ["倒れはじめる力・すべり出す力", `${f(D.Ft,1)} N・${f(D.Fs,1)} N`] : ["倒れはじめる角・すべり出す角", `${f(D.tht,1)}°・${f(D.ths,1)}°`]
+  ]);
+  $("eqs").innerHTML = push
+    ? `<p class="eq">すべらない：${S("F")} ≦ ${S("μ")}${S("m")}${S("g")}　倒れない（前の下の辺のまわり）：${S("F")}${S("h")} ≦ ${S("m")}${S("g")} · ${S("a")}/2</p>
+<p class="eq">N の作用点は ${S("d")} ＝ ${S("F")}${S("h")}/(${S("m")}${S("g")}) だけ前へ動き、${S("d")} ＝ ${S("a")}/2（前の辺）で倒れはじめる。<b>倒れるのが先</b> ⇔ ${S("m")}${S("g")}${S("a")}/(2${S("h")}) ＜ ${S("μ")}${S("m")}${S("g")} ⇔ ${S("h")} ＞ ${S("a")}/(2${S("μ")}) ＝ <b>${f(D.a/(2*P.mu || 1e-9),2)} m</b></p>`
+    : `<p class="eq">すべらない：${S("m")}${S("g")} sin ${S("θ")} ≦ ${S("μ")}${S("m")}${S("g")} cos ${S("θ")} ⇔ tan ${S("θ")} ≦ ${S("μ")}　倒れない：重力の作用線が底面の内側を通る ⇔ tan ${S("θ")} ≦ ${S("a")}/${S("b")}</p>
+<p class="eq"><b>倒れるのが先</b> ⇔ ${S("a")}/${S("b")} ＜ ${S("μ")}（細長い箱ほど・摩擦が大きいほど倒れやすい）。いまは ${S("a")}/${S("b")} ＝ ${f(D.a/D.b,2)}、${S("μ")} ＝ ${f(P.mu,2)}</p>`;
+  const btn = $("tipGo"); if(btn) btn.textContent = TIP.phase === "static" ? (q >= Math.min(L.qs, L.qt) ? (push ? "▶ この力で押す" : "▶ この角度で置く") : (push ? "▶ だんだん強く押す" : "▶ だんだん傾ける")) : "▶ もう一度";
+}
+
 function table(rows){ return `<table class="ro">${rows.map(r => `<tr><td>${r[0]}</td><td class="num">${r[1]}</td></tr>`).join("")}</table>`; }
 
 const ASKS = {
+  tip:[
+    ["「だんだん強く押す」を押そう。押す力を強くすると、垂直抗力 N の作用点はどう動くか。", "前（押す向き）へ動く。作用点が前の下の辺に達したとき（d ＝ a/2）が倒れはじめる限界。"],
+    ["押す高さ h を低くしていくと、倒れるのとすべるのはどちらが先になるか。", "すべるのが先になる。倒れはじめる力 mga/(2h) は h が小さいほど大きく、h ＜ a/(2μ) ならすべり出す力 μmg のほうが小さい。"],
+    ["「斜面」で、箱の幅 a を大きくしていくと結果はどう変わるか。", "a/b ＞ μ になると、倒れる前にすべる。幅の広い（低い）箱はすべり、細長い箱は倒れる。"],
+    ["斜面で倒れはじめるとき、重心 G を通る鉛直線（緑の点線）はどこを通っているか。", "底面の前の辺（回転の軸）をちょうど通る。それより外を通ると、重力のモーメントが箱を倒す向きになる。tan θ ＝ a/b。"]
+  ],
   moment:[
     ["θ を 0° から 180° まで動かそう。モーメントが最大・0 になるのはいつか。", "θ ＝ 90°（棒に垂直）で最大、θ ＝ 0°・180°（作用線が O を通る）で 0。"],
     ["「作用点を作用線上で動かす」を動かしても、M が変わらないのはなぜか。", "うでの長さ（O から作用線までの距離）が変わらないから。"],
@@ -421,12 +578,12 @@ const ASKS = {
 };
 function renderAsks(){ $("asks").innerHTML = ASKS[mode].map(a => `<li>${a[0]} <details><summary>答え</summary> ${a[1]}</details></li>`).join(""); }
 
-function draw(){ $("stageNote").textContent = mode === "balance" ? "下の目盛りは、傾く前の棒の位置 x〔m〕。棒の濃さは密度（濃いほど重い）、×印は棒だけの重心。" : ""; ({moment:drawMoment, balance:drawBalance, ladder:drawLadder})[mode](); }
+function draw(){ $("stageNote").textContent = mode === "balance" ? "下の目盛りは、傾く前の棒の位置 x〔m〕。棒の濃さは密度（濃いほど重い）、×印は棒だけの重心。" : ""; ({moment:drawMoment, balance:drawBalance, ladder:drawLadder, tip:drawTip})[mode](); }
 function setHash(){
   const keys = Object.keys(DEF[mode]);
   try{ history.replaceState(null, "", "#" + mode + keys.map(k => `&${k}=${P[k]}`).join("")); }catch(e){}
 }
-function update(){ syncControls(); setHash(); draw(); }
+function update(){ if(mode === "tip") tipReset(); syncControls(); setHash(); draw(); }
 function setMode(m, params){
   mode = m; Object.keys(P).forEach(k => delete P[k]); Object.assign(P, DEF[m], params || {});
   buildControls(); renderAsks(); update();
@@ -434,7 +591,7 @@ function setMode(m, params){
 function readHash(){
   const parts = location.hash.replace(/^#/, "").split("&");
   const m = DEF[parts[0]] ? parts[0] : "moment", prm = {};
-  parts.slice(1).forEach(kv => { const [k, v] = kv.split("="); if(!(k in DEF[m])) return; if(k === "ax") prm[k] = ["A","B","G"].includes(v) ? v : "A"; else { const n = parseFloat(v); if(!isNaN(n)) prm[k] = n; } });
+  parts.slice(1).forEach(kv => { const [k, v] = kv.split("="); if(!(k in DEF[m])) return; if(k === "ax") prm[k] = ["A","B","G"].includes(v) ? v : "A"; else if(k === "sc") prm[k] = v === "slope" ? "slope" : "push"; else { const n = parseFloat(v); if(!isNaN(n)) prm[k] = n; } });
   setMode(m, prm);
 }
 document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));

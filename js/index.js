@@ -19,7 +19,7 @@ window.UNIT_LIST = [
     { id: "anim-deriv", title: "▶ 速度・加速度の定義ラボ",   href: "anim/deriv.html#vel", note: "一般の曲線運動で、Δt を 0 に近づけると平均の速度 Δr/Δt が接線方向の瞬間の速度 dr/dt に、平均の加速度 Δv/Δt が瞬間の加速度 dv/dt になる様子。x-t・v-t グラフの割線と接線、速度を1点から並べた図も。合成と相対（v_B ＝ v_A ＋ v_AB、a_B ＝ a_A ＋ a_AB：加速する電車、クレーン、2つの投射）" },
     { id: "anim-plane", title: "▶ 平面運動ラボ",            href: "anim/plane.html#proj", note: "放物運動を位置・速度・加速度ベクトルで見る。速度ベクトルを1点から並べると Δv はいつも鉛直下向き。投げる角度と到達距離、斜面への投射も" },
     { id: "plane",      title: "1 平面内の運動",            file: "units/plane.js" },
-    { id: "anim-rigid", title: "▶ 剛体ラボ",               href: "anim/rigid.html#moment", note: "力のモーメントとうでの長さ（作用点を作用線上で動かす・力の分解）、重心とてこ（密度がかたよった棒の重心を積分で）、はしごのつり合い（どの点のまわりでもモーメントの和が 0）" },
+    { id: "anim-rigid", title: "▶ 剛体ラボ",               href: "anim/rigid.html#moment", note: "力のモーメントとうでの長さ（作用点を作用線上で動かす・力の分解）、重心とてこ（密度がかたよった棒の重心を積分で）、はしごのつり合い（どの点のまわりでもモーメントの和が 0）、箱の転倒（押す・斜面で、倒れるのとすべるのはどちらが先か。垂直抗力の作用点が動く）" },
     { id: "rigid",      title: "2 剛体のつり合い",          file: "units/rigid.js" },
     { id: "anim-momentum", title: "▶ 運動量ラボ",          href: "anim/momentum.html#collide", note: "一直線上の衝突（x-t・v-t・p-t・F-t 図が連動、力積 ＝ F-t 図の面積）、平面での合体（運動量の矢印の和）、床ではね返るボール（h′ ＝ e²h）" },
     { id: "momentum",   title: "3 運動量と力積",            file: "units/momentum.js" },
