@@ -72,7 +72,7 @@ const FIG_ELLIPSE = `<svg class="graph" viewBox="0 0 320 170" role="img" aria-la
 
 const SECTIONS = [
 { id:"def", advice:"ケプラーの3法則と、万有引力・位置エネルギー −GMm/r の形を定義カードで確かめよう。", tab:"①定義", title:"① 定義カード",
-  intro:`ニュートンは、ケプラーの法則（観測から見つかった惑星運動の規則）を、<b>万有引力</b>と運動の法則から説明しました。リンゴの落下と月の公転が同じ力によるものだ、というのがこの単元の中心です。<br>シミュレーターで確かめよう：<br>${ANIM("anim/gravitation.html#orbit","人工衛星の軌道（面積速度・エネルギー）")}${ANIM("anim/gravitation.html#kepler","ケプラーの第3法則")}${ANIM("anim/gravitation.html#escape","打ち上げと第2宇宙速度")}`,
+  intro:`ニュートンは、ケプラーの法則（観測から見つかった惑星運動の規則）を、<b>万有引力</b>と運動の法則から説明しました。リンゴの落下と月の公転が同じ力によるものだ、というのがこの単元の中心です。<br>シミュレーターで確かめよう：<br>${ANIM("anim/gravitation.html#orbit","人工衛星の軌道（面積速度・エネルギー）")}${ANIM("anim/gravitation.html#kepler","ケプラーの第3法則")}${ANIM("anim/gravitation.html#escape","打ち上げと第2宇宙速度")}${ANIM("anim/gravitation.html#transfer","軌道の変更（人工衛星・探査機）")}${ANIM("anim/gravitation.html#transfer&ex=mars&r1=1&r2=1.524","地球から火星へ")}`,
   ref:{label:"定義カードと導出を見る", html:DEF + DERIVE},
   groups:[
   { title:"A. ケプラーの法則", qs:[
