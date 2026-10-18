@@ -310,8 +310,8 @@ function vcyl(c, o){   // o：x, y, w, h（シリンダーの外形）、frac（
   return {top, bot};
 }
 /* 図の割りつけ：PC は シリンダー｜グラフ、スマホは 上にシリンダーと数値、下にグラフ */
-function gasLayout(ctx, w){
-  const wide = w > 520, want = wide ? "4/3" : "3/4";
+function gasLayout(ctx, w, narrow){
+  const wide = w > 520, want = wide ? "4/3" : (narrow || "3/4");
   if(ctx.stage.style.aspectRatio !== want){ ctx.stage.style.aspectRatio = want; requestAnimationFrame(() => window.dispatchEvent(new Event("resize"))); }
   return wide;
 }
@@ -426,6 +426,235 @@ const isobar = {
 };
 const isoVmax = n => niceCeil(vOf(n, 0.5, 620));
 
+/* ---------- 共通：セルシウス目盛り・エネルギーの棒（Q ＝ ΔU ＋ W′） ---------- */
+function celsius(c, ax, ink3){ c.font = numFont(10); c.fillStyle = ink3; c.textAlign = "center"; c.textBaseline = "alphabetic";
+  [[0, "−273 ℃"], [273, "0 ℃"], [473, "200 ℃"]].forEach(([k, s2]) => { c.fillText(s2, ax.X(k), ax.Y(0) + 40); c.strokeStyle = ink3; c.lineWidth = 1; c.beginPath(); c.moveTo(ax.X(k), ax.Y(0)); c.lineTo(ax.X(k), ax.Y(0) + 4); c.stroke(); }); }
+function energyBars(c, b, Q, dU, Wp, lo, hi, big){
+  // b：{x, y, w, h}。左の柱 ＝ Q、右の柱 ＝ ΔU の上に W′ を積む（終わりの高さが Q と一致する）
+  const ink2 = css("--ink2"), ink3 = css("--ink3"), neg = css("--neg"), hl2 = css("--hl2"), acc = css("--acc");
+  const top = b.y + 46, bt = b.y + b.h - (big ? 58 : 50), Y = v => bt - (v - lo)/(hi - lo)*(bt - top), y0 = Y(0);
+  const cw = Math.min(70, b.w*0.24), x1 = b.x + b.w*0.16, x2 = b.x + b.w*0.6;
+  label(c, "Q ＝ ΔU ＋ W′", b.x + b.w/2, b.y + 10, ink2, "center", uiFont(big ? 15 : 13, true));
+  c.strokeStyle = ink3; c.lineWidth = 1.2; c.beginPath(); c.moveTo(b.x + 4, y0); c.lineTo(b.x + b.w - 4, y0); c.stroke();
+  label(c, "0", b.x + 2, y0 - 7, ink3, "left", numFont(10));
+  const bar = (x, v0, v1, col) => { if(Math.abs(Y(v1) - Y(v0)) < 0.5) return; c.fillStyle = col; c.globalAlpha = 0.85; c.fillRect(x, Math.min(Y(v0), Y(v1)), cw, Math.abs(Y(v1) - Y(v0))); c.globalAlpha = 1; };
+  // 右は「滝」の形：ΔU の柱の終わりから W′ の柱を始める（W′ の柱の終わりが Q の高さ）
+  const hw = cw*0.62, x3 = x2 + hw + 4;
+  bar(x1, 0, Q, neg);
+  const bar2 = (x, v0, v1, col) => { if(Math.abs(Y(v1) - Y(v0)) < 0.5) return; c.fillStyle = col; c.globalAlpha = 0.85; c.fillRect(x, Math.min(Y(v0), Y(v1)), hw, Math.abs(Y(v1) - Y(v0))); c.globalAlpha = 1; };
+  bar2(x2, 0, dU, hl2); bar2(x3, dU, dU + Wp, acc);
+  c.strokeStyle = ink3; c.setLineDash([2, 3]); c.lineWidth = 1; c.beginPath(); c.moveTo(x2, Y(dU)); c.lineTo(x3 + hw, Y(dU)); c.stroke();
+  c.strokeStyle = ink2; c.setLineDash([4, 3]); c.lineWidth = 1.2; c.beginPath(); c.moveTo(x1, Y(Q)); c.lineTo(x3 + hw, Y(Q)); c.stroke(); c.setLineDash([]);
+  label(c, "Q", x1 + cw/2, b.y + 31, neg, "center", uiFont(13, true)); label(c, "ΔU", x2 + hw/2, b.y + 31, hl2, "center", uiFont(13, true)); label(c, "＋ W′", x3 + hw/2, b.y + 31, acc, "center", uiFont(13, true));
+  const sg = v => (v > 0.5 ? "＋" : v < -0.5 ? "−" : "") + f(Math.abs(v), 0);
+  const fs = uiFont(big ? 13 : 12, true), yy = b.y + b.h - (big ? 40 : 34);
+  label(c, `Q ${sg(Q)} J`, x1 + cw/2, yy, neg, "center", fs);
+  label(c, `ΔU ${sg(dU)} J`, x2 + hw + 2, yy, hl2, "center", fs);
+  label(c, `W′ ${sg(Wp)} J`, x2 + hw + 2, yy + 16, acc, "center", fs);
+}
+function addStops(c, x, w, y, ink2){ c.fillStyle = ink2; [[x, 1], [x + w, -1]].forEach(([xx, d]) => { c.beginPath(); c.moveTo(xx, y); c.lineTo(xx + 9*d, y); c.lineTo(xx, y - 7); c.closePath(); c.fill(); }); }
+function insulate(c, o){ const ink3 = css("--ink3"); c.save(); c.fillStyle = ink3; c.globalAlpha = 0.25; c.fillRect(o.x - 9, o.y, 7, o.h + 9); c.fillRect(o.x + o.w + 2, o.y, 7, o.h + 9); c.fillRect(o.x - 9, o.y + o.h + 2, o.w + 18, 7); c.restore(); }
+
+/* ---------- 定積変化（p-T 図）：体積が違うと直線の傾き nR/V が変わる ---------- */
+const isochore = {
+  label:"定積変化（p-T 図）",
+  params:[["n","物質量 "+S("n"),0.5,2,0.1,"mol",1,1],["V","体積 "+S("V")+"（一定）",10,50,0.1,"×10⁻³ m³",1,24.9]],
+  toggles:[["tri","傾きの三角形（ΔT ＝ 100 K）を表示",true],["fam","ほかの体積の直線",true],["cel","セルシウス温度の目盛り",true]],
+  timed:true, graphs:1, wide:[0], aspect:"4/3", dt:1/120,
+  legend:`<span><i style="background:var(--pos)"></i>この体積の直線</span><span><i style="background:var(--hl2)"></i>傾きの三角形</span><span><i style="background:var(--neg)"></i>加熱</span>`,
+  reset(P, St){ partsInit(St, 2468, 48); },
+  duration(){ return 2*TPER; },
+  step(P, St, dt, t){ const T = isobT(t + dt); partsStep(St, dt, t + dt, Math.sqrt(T/300), P.V/25); },
+  draw(ctx){
+    const {P, S:St, T:Tg, t} = ctx; const {c, w, h} = prep(ctx.stage), Lw = gasLayout(ctx, w), L = cylLayout(w, h, Lw);
+    const ink2 = css("--ink2"), ink3 = css("--ink3"), n = P.n, V = P.V, tmax = 650, pmax = niceCeil(pOf(n, tmax, 10));
+    const T = isobT(t), p = pOf(n, T, V), slopePa = n*Rg/(V*1e-3), dT = Math.sin(2*Math.PI*t/TPER);
+    const ax = gaxes(c, L.box, tmax, pmax, "T〔K〕", "p〔×10⁵ Pa〕", ink2, ink3, 100);
+    const cy = vcyl(c, {x:L.cyl.x, y:L.cyl.y, w:L.cyl.w, h:L.cyl.h, frac:V/60, tK:T, ps:St.ps, heat:t < ctx.dur - 1e-6 ? (dT > 0.05 ? 1 : dT < -0.05 ? -1 : 0) : 0});
+    addStops(c, L.cyl.x, L.cyl.w, cy.top - 9, ink2); label(c, "ストッパーで固定", L.cyl.x + L.cyl.w/2, cy.top - 32, ink2, "center", uiFont(10, true));
+    readout(c, L, [[`T ＝ ${f(T, 0)} K（${f(T - 273, 0)} ℃）`, heat(T)], [`p ＝ ${f(p, 2)}×10⁵ Pa`], [`V ＝ ${f(V, 1)}×10⁻³ m³（一定）`]]);
+    if(Tg.cel) celsius(c, ax, ink3);
+    if(Tg.fam){ [10, 20, 30, 50].forEach(VV => { if(Math.abs(VV - V) < 0.5) return; c.strokeStyle = css("--ghost"); c.globalAlpha = 0.6; c.lineWidth = 1.6; curve(c, tt => pOf(n, tt, VV), 0, tmax, pmax, ax.X, ax.Y, 60); c.globalAlpha = 1;
+      const tt = Math.min(tmax*0.96, pmax*0.9/pOf(n, 1, VV)); label(c, `V ＝ ${VV}`, ax.X(tt) + 4, ax.Y(pOf(n, tt, VV)) - 2, css("--ghost"), "left", numFont(10)); }); }
+    c.strokeStyle = css("--pos"); c.lineWidth = 2; c.setLineDash([4, 4]); curve(c, tt => pOf(n, tt, V), 0, 150, pmax, ax.X, ax.Y, 10); c.setLineDash([]);
+    c.lineWidth = 3.4; curve(c, tt => pOf(n, tt, V), 150, tmax, pmax, ax.X, ax.Y, 60);
+    const tl2 = Math.min(tmax*0.96, pmax*0.88/pOf(n, 1, V)); label(c, `V ＝ ${f(V,1)}`, ax.X(tl2) - 6, ax.Y(pOf(n, tl2, V)) + 14, css("--pos"), "right", uiFont(13, true));
+    if(p <= pmax){ c.setLineDash([3, 4]); c.strokeStyle = ink3; c.lineWidth = 1.2; c.beginPath(); c.moveTo(ax.X(T), ax.Y(0)); c.lineTo(ax.X(T), ax.Y(p)); c.lineTo(ax.X(0), ax.Y(p)); c.stroke(); c.setLineDash([]); }
+    if(Tg.tri){ const p0 = pOf(n, 300, V), p1 = pOf(n, 400, V), hl2 = css("--hl2");
+      if(p1 <= pmax){ c.strokeStyle = hl2; c.lineWidth = 2.2; c.beginPath(); c.moveTo(ax.X(300), ax.Y(p0)); c.lineTo(ax.X(400), ax.Y(p0)); c.lineTo(ax.X(400), ax.Y(p1)); c.stroke();
+        label(c, "ΔT ＝ 100 K", ax.X(350), ax.Y(p0) + 13, hl2, "center", uiFont(11, true)); label(c, `Δp ＝ ${f(p1 - p0, 2)}`, ax.X(400) + 5, (ax.Y(p0) + ax.Y(p1))/2, hl2, "left", uiFont(11, true)); } }
+    if(p <= pmax) disc(c, ax.X(T), ax.Y(p), 6.5, heat(T), css("--surface"));
+    label(c, `傾き ＝ nR/V ＝ ${f(slopePa, 0)} Pa/K`, L.box.x + L.box.w, L.box.y - 8, css("--hl2"), "right", uiFont(L.wide ? 12 : 11, true));
+    // 補助のグラフ：p-V 図（体積一定で、圧力だけが変わる）
+    const {c:g, w:gw, h:gh} = prep(ctx.graphs[0]), gpm = niceCeil(pOf(n, 650, Math.min(V, 20))), gb = {x:46, y:26, w:gw - 70, h:gh - 66}, gx = gaxes(g, gb, 60, gpm, "V〔×10⁻³ m³〕", "p〔×10⁵ Pa〕", ink2, ink3);
+    g.font = uiFont(12); g.fillStyle = ink2; g.textBaseline = "middle"; g.textAlign = "left"; g.fillText("同じ変化を p-V 図で見ると：体積は一定で、圧力だけが変わる（縦の線）", 8, 10);
+    [150, 300, 600].forEach(TT => { g.strokeStyle = heat(TT); g.globalAlpha = 0.35; g.lineWidth = 1.4; curve(g, v => pOf(n, TT, v), 3, 60, gpm, gx.X, gx.Y, 120); g.globalAlpha = 1; label(g, `${TT} K`, gx.X(60) - 2, gx.Y(pOf(n, TT, 58)) - 8, heat(TT), "right", numFont(10)); });
+    g.strokeStyle = css("--pos"); g.globalAlpha = 0.4; g.lineWidth = 3.4; g.beginPath(); g.moveTo(gx.X(V), gx.Y(pOf(n, 150, V))); g.lineTo(gx.X(V), gx.Y(Math.min(gpm, pOf(n, 600, V)))); g.stroke(); g.globalAlpha = 1;
+    if(p <= gpm) disc(g, gx.X(V), gx.Y(p), 6.5, heat(T), css("--surface"));
+    const hr = hitRate(St, t);
+    ctx.banner(`体積 ${f(V,1)}×10⁻³ m³ のまま：T ＝ ${f(T,0)} K で p ＝ ${f(p,2)}×10⁵ Pa、p/T ＝ nR/V ＝ ${f(slopePa,0)} Pa/K（一定）`, "--ui");
+    ctx.ro(table([[`体積 ${S("V")}（一定）`, `${f(V,1)} ×10⁻³ m³`], [`温度 ${S("T")}`, `${f(T,0)} K（${f(T - 273,0)} ℃）`], [`圧力 ${S("p")} ＝ (${S("n")}${S("R")}/${S("V")})${S("T")}`, `${f(p,3)} ×10⁵ Pa`], [`傾き ${S("p")}/${S("T")} ＝ ${S("n")}${S("R")}/${S("V")}`, `${f(slopePa,0)} Pa/K`], [`分子がピストンに当たる回数（毎秒、ゆらぎあり）`, `${f(hr, 0)} 回`]]));
+    ctx.eqs(`<p class="eq">ストッパーでピストンを固定し、加熱・冷却する。温度が上がると分子が速くなり、ピストンに当たる回数も、1回の衝突の強さも増える。両方とも速さに比例するので、圧力は速さの2乗、つまり<b>絶対温度に比例</b>する。</p><p class="eq">定積変化では ${S("p")} ＝ (${S("n")}${S("R")}/${S("V")})${S("T")}。p-T 図は<b>原点を通る直線</b>で、傾きは ${S("n")}${S("R")}/${S("V")}。体積が<b>小さい</b>ほど傾きは<b>大きい</b>。体積が 2 倍なら傾きは ½ 倍。</p><p class="eq">p-T 図は教科書ではあまり使われないが、シャルルの法則の V-T 図と同じ形で「圧力は絶対温度に比例する」ことが読める。体積が変わらないので仕事は 0（${S("W")}′ ＝ 0）。</p>`);
+  },
+  asks:[
+    ["再生して、温度と圧力の関係を見よう。絶対温度が 2 倍になると、圧力は何倍になるか。", "2 倍（p ∝ T）。"],
+    ["温度が上がると、分子がピストンに当たる回数と1回の衝突の強さはそれぞれどうなるか。", "どちらも増える（どちらも分子の速さに比例）。その積で、圧力は温度に比例して大きくなる。"],
+    ["体積を 2 倍にしよう。p-T 直線の傾きは何倍になるか。", "½ 倍。傾き nR/V は体積に反比例する。"],
+    ["直線を低温側に延ばすと、どこを通るか。", "原点（T ＝ 0 K で p ＝ 0）。"],
+    ["定積変化で、気体がする仕事はいくらか。", "0。体積が変わらないので、吸収した熱はすべて内部エネルギーの増加になる。"]
+  ]
+};
+
+/* ---------- 断熱変化（p-V 図）：断熱線は等温線より急で、温度が変わる ---------- */
+const adia = {
+  label:"断熱変化（p-V 図）",
+  params:[["n","物質量 "+S("n"),0.5,2,0.1,"mol",1,1],["T0","はじめの温度 "+S("T")+"₀（V ＝ 31×10⁻³ m³）",200,600,10,"K",0,300]],
+  toggles:[["iso","等温変化と比べる",true],["fam","等温線（温度の目もり）",true],["area","仕事（曲線の下の面積）",true]],
+  timed:true, graphs:1, wide:[0], aspect:"4/3", dt:1/120,
+  legend:`<span><i style="background:var(--vel)"></i>断熱線 ${S("p")}${S("V")}<sup>5/3</sup> ＝ 一定</span><span><i style="background:var(--ghost)"></i>等温変化なら</span><span><i style="background:var(--acc)"></i>ピストンを動かす向き</span>`,
+  reset(P, St){ partsInit(St, 1357, 48); },
+  duration(){ return 2*VPER; },
+  step(P, St, dt, t){ const V = isoV(t + dt), T = P.T0*Math.pow(VMID/V, 2/3); partsStep(St, dt, t + dt, Math.sqrt(T/300), V/25); },
+  draw(ctx){
+    const {P, S:St, T:Tg, t} = ctx; const {c, w, h} = prep(ctx.stage), Lw = gasLayout(ctx, w), L = cylLayout(w, h, Lw);
+    const ink2 = css("--ink2"), ink3 = css("--ink3"), n = P.n, T0 = P.T0, V = isoV(t), Tad = v => T0*Math.pow(VMID/v, 2/3), T = Tad(V), p = pOf(n, T, V), dV = Math.cos(2*Math.PI*t/VPER);
+    const vmax = 70, pmax = niceCeil(pOf(n, Tad(12), 12)*1.05), ax = gaxes(c, L.box, vmax, pmax, "V〔×10⁻³ m³〕", "p〔×10⁵ Pa〕", ink2, ink3);
+    const dU = 1.5*n*Rg*(T - T0), Wp = -dU, vel = css("--vel");
+    insulate(c, L.cyl);
+    vcyl(c, {x:L.cyl.x, y:L.cyl.y, w:L.cyl.w, h:L.cyl.h, frac:V/vmax, tK:T, ps:St.ps, push:t < ctx.dur - 1e-6 ? (dV > 0.05 ? 1 : dV < -0.05 ? -1 : 0) : 0});
+    label(c, "断熱材（Q ＝ 0）", L.cyl.x + L.cyl.w/2, L.cyl.y + L.cyl.h + 24, ink3, "center", uiFont(11, true));
+    readout(c, L, [[`T ＝ ${f(T, 0)} K`, heat(T)], [`p ＝ ${f(p, 2)}×10⁵ Pa`], [`V ＝ ${f(V, 1)}×10⁻³ m³`]]);
+    if(Tg.fam){ for(let TT = 100; TT <= 1200; TT += 100){ c.strokeStyle = heat(TT); c.globalAlpha = 0.3; c.lineWidth = 1.4; curve(c, v => pOf(n, TT, v), 3, vmax, pmax, ax.X, ax.Y, 160); c.globalAlpha = 1;
+      if(L.wide ? TT % 200 === 0 : TT % 400 === 0) label(c, `${TT} K`, ax.X(vmax) + 2, ax.Y(pOf(n, TT, vmax*0.97)), heat(TT), "left", numFont(10)); } }
+    if(Tg.area){ const a = Math.min(V, VMID), b = Math.max(V, VMID); c.fillStyle = V >= VMID ? css("--hl2-a") : css("--neg-a"); c.beginPath(); c.moveTo(ax.X(a), ax.Y(0)); for(let i = 0; i <= 40; i++){ const v = a + (b - a)*i/40; c.lineTo(ax.X(v), ax.Y(Math.min(pmax, pOf(n, Tad(v), v)))); } c.lineTo(ax.X(b), ax.Y(0)); c.closePath(); c.fill();
+      if(Math.abs(V - VMID) > 4) label(c, V >= VMID ? `気体がした仕事 ${f(Wp, 0)} J` : `された仕事 ${f(-Wp, 0)} J`, ax.X((a + b)/2), ax.Y(0) - 14, V >= VMID ? css("--hl2") : css("--neg"), "center", uiFont(11, true)); }
+    if(Tg.iso){ c.strokeStyle = css("--ghost"); c.lineWidth = 2; c.setLineDash([5, 4]); curve(c, v => pOf(n, T0, v), 3, vmax, pmax, ax.X, ax.Y, 160); c.setLineDash([]); const pi = pOf(n, T0, V); if(pi <= pmax) disc(c, ax.X(V), ax.Y(pi), 4.5, css("--ghost")); label(c, `等温なら（${T0} K）`, ax.X(20) + 8, ax.Y(Math.min(pmax*0.95, pOf(n, T0, 20))), css("--ghost"), "left", numFont(10)); }
+    c.strokeStyle = vel; c.lineWidth = 3.4; curve(c, v => pOf(n, Tad(v), v), 8, vmax, pmax, ax.X, ax.Y, 200);
+    label(c, "断熱線", ax.X(14) + 6, ax.Y(Math.min(pmax*0.9, pOf(n, Tad(14), 14))), vel, "left", uiFont(12, true));
+    disc(c, ax.X(VMID), ax.Y(pOf(n, T0, VMID)), 4, ink2);
+    if(p <= pmax){ disc(c, ax.X(V), ax.Y(p), 6.5, heat(T), css("--surface")); label(c, `${f(T, 0)} K`, ax.X(V) + 9, ax.Y(p) - 10, heat(T), "left", uiFont(12, true)); }
+    // 補助：エネルギーの棒（Q ＝ 0 なので ΔU ＝ −W′）
+    const {c:g, w:gw, h:gh} = prep(ctx.graphs[0]), Em = 1.5*n*Rg*(Tad(12) - T0)*1.1;
+    energyBars(g, {x:0, y:0, w:gw, h:gh}, 0, dU, Wp, -Em*0.6, Em, false);
+    ctx.banner(`断熱（Q ＝ 0）：ΔU ＝ −W′ ＝ ${f(dU, 0)} J、温度 ${T0} K → ${f(T, 0)} K`, "--ui");
+    ctx.ro(table([[`温度 ${S("T")}（はじめ ${T0} K）`, `${f(T,0)} K`], [`圧力 ${S("p")}`, `${f(p,3)} ×10⁵ Pa`], [`同じ体積で等温なら`, `${f(pOf(n, T0, V),3)} ×10⁵ Pa`], [`内部エネルギーの増加 Δ${S("U")} ＝ (3/2)${S("n")}${S("R")}Δ${S("T")}`, `${f(dU,0)} J`], [`気体がした仕事 ${S("W")}′ ＝ −Δ${S("U")}`, `${f(Wp,0)} J`], [`${S("T")}${S("V")}<sup>2/3</sup>（一定）`, f(T*Math.pow(V, 2/3), 0)]]));
+    ctx.eqs(`<p class="eq">断熱材で囲み、熱の出入りをなくして（${S("Q")} ＝ 0）ピストンを動かす。熱力学第一法則から Δ${S("U")} ＝ −${S("W")}′：<b>圧縮</b>すると外からされた仕事の分だけ内部エネルギーが増えて<b>温度が上がり</b>、<b>膨張</b>すると外にした仕事の分だけ<b>温度が下がる</b>。</p><p class="eq">断熱線は ${S("p")}${S("V")}<sup>5/3</sup> ＝ 一定（単原子分子、${S("T")}${S("V")}<sup>2/3</sup> ＝ 一定）。膨張すると温度も下がるので、等温線（点線）より<b>傾きが急</b>で、等温線を次々に横切る。</p>`);
+  },
+  asks:[
+    ["再生して、圧縮のときと膨張のときの温度を見よう。分子の動きはどう変わるか。", "圧縮すると温度が上がって分子が速くなり、膨張すると温度が下がって遅くなる。"],
+    ["断熱線と等温線（点線）を比べよう。同じ体積まで膨張したとき、圧力が低いのはどちらか。それはなぜか。", "断熱。温度も下がるので、等温のときより圧力が大きく下がる（断熱線のほうが急）。"],
+    ["断熱変化で、熱力学第一法則はどうなるか。棒グラフで確かめよう。", "Q ＝ 0 なので ΔU ＝ −W′。された仕事の分だけ内部エネルギーが増える。"],
+    ["自転車の空気入れを急に押すと熱くなる。この図のどの動きに当たるか。", "断熱圧縮。点が断熱線を左上へ進み、温度が上がる。"],
+    ["体積を 31 から 12（×10⁻³ m³）まで圧縮すると、温度はおよそ何倍になるか。", "(31/12)^(2/3) ≒ 1.9 倍。TV^(2/3) ＝ 一定から。"]
+  ]
+};
+
+/* ---------- 状態変化と熱力学第一法則：Q ＝ ΔU ＋ W′ を棒で見る ---------- */
+const FLN = {v:"定積変化", p:"定圧変化", T:"等温変化", a:"断熱変化"};
+function flState(proc, dir, s){
+  const n = 1, V0 = 24.9, up = dir === "e";
+  if(proc === "v"){ const T = 300 + (up ? 150 : -100)*s; return {V:V0, T, p:T/300, dU:1.5*n*Rg*(T - 300), Wp:0}; }
+  if(proc === "p"){ const T = 300 + (up ? 150 : -100)*s; return {V:V0*T/300, T, p:1, dU:1.5*n*Rg*(T - 300), Wp:n*Rg*(T - 300)}; }
+  const V = up ? V0*(1 + s) : V0*(1 - 0.5*s);
+  if(proc === "T") return {V, T:300, p:V0/V, dU:0, Wp:n*Rg*300*Math.log(V/V0)};
+  const T = 300*Math.pow(V0/V, 2/3); return {V, T, p:pOf(n, T, V), dU:1.5*n*Rg*(T - 300), Wp:-1.5*n*Rg*(T - 300)};
+}
+const first = {
+  label:"状態変化と熱力学第一法則",
+  selects:[["proc","変化の種類",[["v","定積変化"],["p","定圧変化"],["T","等温変化"],["a","断熱変化"]],"p"],["dir","向き",[["e","膨張させる（定積は加熱）"],["c","圧縮する（定積は冷却）"]],"e"]],
+  timed:true, graphs:1, wide:[0], aspect:"4/3", dt:1/120,
+  legend:`<span><i style="background:var(--neg)"></i>吸収した熱 ${S("Q")}</span><span><i style="background:var(--hl2)"></i>内部エネルギーの増加 Δ${S("U")}</span><span><i style="background:var(--acc)"></i>気体がした仕事 ${S("W")}′</span>`,
+  reset(P, St){ partsInit(St, 9753, 48); },
+  duration(){ return 6; },
+  step(P, St, dt, t){ const q = flState(P.proc, P.dir, Math.min(1, (t + dt)/5)); partsStep(St, dt, t + dt, Math.sqrt(q.T/300), q.V/25); },
+  draw(ctx){
+    const {P, S:St, t} = ctx; const {c, w, h} = prep(ctx.stage), Lw = gasLayout(ctx, w, "3/5"), L = cylLayout(w, h, Lw);
+    const ink2 = css("--ink2"), ink3 = css("--ink3"), s = Math.min(1, t/5), q0 = 0, q = flState(P.proc, P.dir, s), Q = q.dU + q.Wp, up = P.dir === "e", moving = s > 0 && s < 1;
+    const o = {x:L.cyl.x, y:L.cyl.y, w:L.cyl.w, h:L.cyl.h, frac:q.V/60, tK:q.T, ps:St.ps};
+    if(P.proc === "a") insulate(c, L.cyl);
+    if(P.proc === "p") o.weight = 1;
+    if(P.proc === "T") o.bath = true;
+    if((P.proc === "v" || P.proc === "p") && moving) o.heat = up ? 1 : -1;
+    if((P.proc === "T" || P.proc === "a") && moving) o.push = up ? 1 : -1;
+    const cy = vcyl(c, o);
+    if(P.proc === "v") addStops(c, L.cyl.x, L.cyl.w, cy.top - 9, ink2);
+    if(P.proc === "T" && moving){ const cc = up ? css("--neg") : css("--pos"); for(let k = 1; k <= 3; k++){ const xx = L.cyl.x + L.cyl.w*k/4; up ? arrow(c, xx, cy.bot + 20, xx, cy.bot + 3, cc, 2.4) : arrow(c, xx, cy.bot + 3, xx, cy.bot + 20, cc, 2.4); } }
+    label(c, {v:"体積一定（ストッパー）", p:"圧力一定（おもり）", T:"温度一定（恒温槽）", a:"断熱（Q ＝ 0）"}[P.proc], L.cyl.x + L.cyl.w/2, L.cyl.y + L.cyl.h + (P.proc === "T" ? 40 : 40), ink2, "center", uiFont(11, true));
+    readout(c, L, [[`T ＝ ${f(q.T, 0)} K`, heat(q.T)], [`p ＝ ${f(q.p, 2)}×10⁵ Pa`], [`V ＝ ${f(q.V, 1)}×10⁻³ m³`]]);
+    energyBars(c, L.box, Q, q.dU, q.Wp, -2300, 3300, L.wide);
+    // 補助：p-V 図
+    const {c:g, w:gw, h:gh} = prep(ctx.graphs[0]), gb = {x:46, y:26, w:gw - 70, h:gh - 66}, gx = gaxes(g, gb, 60, 3.5, "V〔×10⁻³ m³〕", "p〔×10⁵ Pa〕", ink2, ink3);
+    g.font = uiFont(12); g.fillStyle = ink2; g.textBaseline = "middle"; g.textAlign = "left"; g.fillText("p-V 図：曲線の下の面積 ＝ 気体がした仕事 W′", 8, 10);
+    g.strokeStyle = ink3; g.globalAlpha = 0.5; g.setLineDash([3, 4]); g.lineWidth = 1.2; curve(g, v => 24.9/v, 3, 60, 3.5, gx.X, gx.Y, 120); g.setLineDash([]); g.globalAlpha = 1; label(g, "300 K の等温線", gx.X(58), gx.Y(24.9/58) - 9, ink3, "right", numFont(10));
+    if(Math.abs(q.V - 24.9) > 0.05){ const a = Math.min(q.V, 24.9), b = Math.max(q.V, 24.9); g.fillStyle = up ? css("--hl2-a") : css("--neg-a"); g.beginPath(); g.moveTo(gx.X(a), gx.Y(0)); for(let i = 0; i <= 40; i++){ const ss = s*i/40, r = flState(P.proc, P.dir, ss); g.lineTo(gx.X(r.V), gx.Y(r.p)); } g.lineTo(gx.X(q.V), gx.Y(0)); g.lineTo(gx.X(24.9), gx.Y(0)); g.closePath(); g.fill(); }
+    g.strokeStyle = css("--pos"); g.globalAlpha = 0.3; g.lineWidth = 2; g.beginPath(); for(let i = 0; i <= 40; i++){ const r = flState(P.proc, P.dir, i/40); i ? g.lineTo(gx.X(r.V), gx.Y(r.p)) : g.moveTo(gx.X(r.V), gx.Y(r.p)); } g.stroke(); g.globalAlpha = 1;
+    g.lineWidth = 3; g.beginPath(); for(let i = 0; i <= 40; i++){ const r = flState(P.proc, P.dir, s*i/40); i ? g.lineTo(gx.X(r.V), gx.Y(r.p)) : g.moveTo(gx.X(r.V), gx.Y(r.p)); } g.stroke();
+    disc(g, gx.X(q.V), gx.Y(q.p), 6.5, heat(q.T), css("--surface"));
+    const why = {v:[`体積が変わらない → ${S("W")}′ ＝ 0`, `吸収した熱はすべて内部エネルギーに：${S("Q")} ＝ Δ${S("U")}`],
+      p:[`体積が変わる → ${S("W")}′ ＝ ${S("p")}Δ${S("V")} ＝ ${S("n")}${S("R")}Δ${S("T")}`, `熱の一部が仕事に：${S("Q")} ＝ Δ${S("U")} ＋ ${S("W")}′（${S("Q")} : Δ${S("U")} : ${S("W")}′ ＝ 5 : 3 : 2）`],
+      T:[`温度が変わらない → Δ${S("U")} ＝ 0`, `熱はすべて仕事に：${S("Q")} ＝ ${S("W")}′`],
+      a:[`熱の出入りがない → ${S("Q")} ＝ 0`, `仕事の分だけ内部エネルギーが変わる：Δ${S("U")} ＝ −${S("W")}′`]}[P.proc];
+    const dirName = {v:up ? "加熱" : "冷却", p:up ? "加熱して膨張" : "冷却して収縮", T:up ? "膨張" : "圧縮", a:up ? "膨張" : "圧縮"}[P.proc], par = v => v < -0.5 ? `(${f(v,0)})` : f(v,0);
+    ctx.banner(`${FLN[P.proc]}（${dirName}）：Q ＝ ΔU ＋ W′ → ${par(Q)} ＝ ${par(q.dU)} ＋ ${par(q.Wp)}〔J〕`, "--ui");
+    ctx.ro(table([[`吸収した熱 ${S("Q")}（熱の出入り）`, `${f(Q,0)} J`], [`内部エネルギーの増加 Δ${S("U")}（温度の変化で決まる）`, `${f(q.dU,0)} J`], [`気体がした仕事 ${S("W")}′（体積の変化で決まる）`, `${f(q.Wp,0)} J`], [`温度 ${S("T")}`, `300 → ${f(q.T,0)} K`], [`体積 ${S("V")}`, `24.9 → ${f(q.V,1)} ×10⁻³ m³`]]));
+    ctx.eqs(`<p class="eq">${why[0]}</p><p class="eq">${why[1]}</p><p class="eq">左の柱（${S("Q")}）の高さと、右の階段（Δ${S("U")} の柱の終わりから ${S("W")}′ の柱を続けたもの）の終わりの高さが、いつも等しい（点線）。これが熱力学第一法則 ${S("Q")} ＝ Δ${S("U")} ＋ ${S("W")}′。単原子分子の理想気体 1 mol、はじめ 300 K・24.9×10⁻³ m³・1.0×10⁵ Pa。</p>`);
+  },
+  asks:[
+    ["定積変化で加熱しよう。W′ の柱はどうなるか。Q はどこへ行ったか。", "W′ ＝ 0。吸収した熱はすべて内部エネルギーの増加（温度上昇）になる。"],
+    ["定圧変化で加熱しよう。Q・ΔU・W′ の比はいくらか。", "5 : 3 : 2。熱の一部が外への仕事になるので、同じ温度上昇でも定積より多くの熱が必要。"],
+    ["等温変化で膨張させよう。ΔU の柱はどうなるか。", "0。温度が変わらないので内部エネルギーは変わらず、吸収した熱がすべて仕事になる。"],
+    ["断熱変化で圧縮しよう。Q・ΔU・W′ はどうなるか。", "Q ＝ 0、W′ は負（された仕事）、ΔU はその分だけ正（温度が上がる）。"],
+    ["4つの変化で、ΔU が温度だけで決まることを確かめよう。", "ΔU ＝ (3/2)nRΔT。温度が上がれば正、下がれば負、等温なら 0。"]
+  ]
+};
+
+/* ---------- 定積モル比熱と定圧モル比熱：同じ加熱で温度の上がり方が違う ---------- */
+const MT1 = 4;
+const molar = {
+  label:"定積モル比熱と定圧モル比熱",
+  params:[["dT","温度の上昇 Δ"+S("T"),50,200,10,"K",0,100],["n","物質量 "+S("n"),0.5,2,0.1,"mol",1,1]],
+  timed:true, graphs:1, wide:[0], aspect:"4/3", dt:1/120,
+  legend:`<span><i style="background:var(--neg)"></i>吸収した熱 ${S("Q")}</span><span><i style="background:var(--hl2)"></i>内部エネルギーの増加 Δ${S("U")}</span><span><i style="background:var(--acc)"></i>気体がした仕事 ${S("W")}′</span>`,
+  reset(P, St){ St.a = {}; St.b = {}; partsInit(St.a, 1111, 36); partsInit(St.b, 2222, 36); },
+  duration(){ return MT1*5/3 + 1.5; },
+  step(P, St, dt, t){ const m = molarAt(P, t + dt); partsStep(St.a, dt, t + dt, Math.sqrt(m.Tv/300), 24.9/25); partsStep(St.b, dt, t + dt, Math.sqrt(m.Tp/300), m.Vp/25); },
+  draw(ctx){
+    const {P, S:St, t} = ctx; const {c, w, h} = prep(ctx.stage), wide = gasLayout(ctx, w), m = molarAt(P, t), ink2 = css("--ink2"), nR = P.n*Rg;
+    const R1 = wide ? {x:0, y:0, w:w/2, h} : {x:0, y:0, w, h:h/2}, R2 = wide ? {x:w/2, y:0, w:w/2, h} : {x:0, y:h/2, w, h:h/2};
+    if(wide){ c.strokeStyle = css("--line"); c.beginPath(); c.moveTo(w/2, 10); c.lineTo(w/2, h - 10); c.stroke(); } else { c.strokeStyle = css("--line"); c.beginPath(); c.moveTo(10, h/2); c.lineTo(w - 10, h/2); c.stroke(); }
+    const Emax = 2.5*nR*P.dT*1.12, VB = 24.9*(300 + 200)/300*1.1;
+    [[R1, "定積（体積一定）", m.Tv, 24.9, m.Qv, St.a, false, m.hv], [R2, "定圧（圧力一定）", m.Tp, m.Vp, m.Qp, St.b, true, m.hp]].forEach(([R, ttl, T, V, Q, ss, isP, heating]) => {
+      label(c, ttl, R.x + 12, R.y + 14, ink2, "left", uiFont(wide ? 14 : 13, true));
+      const cyl = {x:R.x + 22, y:R.y + (wide ? 70 : 52), w:Math.min(80, R.w*0.22), h:R.h - (wide ? 140 : 100)};
+      const o = {x:cyl.x, y:cyl.y, w:cyl.w, h:cyl.h, frac:V/VB, tK:T, ps:ss.ps, heat:heating ? 1 : 0};
+      if(isP) o.weight = 1;
+      const cy = vcyl(c, o); if(!isP) addStops(c, cyl.x, cyl.w, cy.top - 9, ink2);
+      label(c, `${f(T, 1)} K（＋${f(T - 300, 1)}）`, cyl.x + cyl.w/2, R.y + (wide ? 40 : 32), heat(T), "center", uiFont(12, true));
+      const dU = 1.5*nR*(T - 300), Wp = isP ? nR*(T - 300) : 0;
+      energyBars(c, {x:cyl.x + cyl.w + 24, y:R.y + 20, w:R.x + R.w - (cyl.x + cyl.w + 24) - 8, h:R.h - 26}, Q, dU, Wp, 0, Emax, wide);
+    });
+    // 補助：温度の時間変化（同じ加熱の強さ）
+    graph(ctx.graphs[0], {title:"温度 T（同じ強さで加熱）", unit:"K", tmax:ctx.dur, t, ylo:290, yhi:300 + P.dT*1.15, series:[{fn:tt => molarAt(P, tt).Tv, color:"--pos", name:"定積"}, {fn:tt => molarAt(P, tt).Tp, color:"--vel", name:"定圧"}]});
+    const Cv = 1.5*Rg, Cp = 2.5*Rg, done = !m.hv && !m.hp;
+    ctx.banner(done ? `同じ ΔT ＝ ${P.dT} K に、定積は ${f(m.Qv,0)} J、定圧は ${f(m.Qp,0)} J の熱が必要（差 ${f(m.Qp - m.Qv,0)} J ＝ nRΔT ＝ 外への仕事）` : `同じ強さ（${f(m.Ph,0)} J/s）で加熱中…`, "--ui");
+    ctx.ro(table([[`内部エネルギーの増加 Δ${S("U")}（どちらも (3/2)${S("n")}${S("R")}Δ${S("T")}）`, `${f(1.5*nR*(m.Tv - 300),0)} J ／ ${f(1.5*nR*(m.Tp - 300),0)} J`], [`気体がした仕事 ${S("W")}′（定積 ／ 定圧）`, `0 J ／ ${f(nR*(m.Tp - 300),0)} J`], [`吸収した熱 ${S("Q")}（定積 ／ 定圧）`, `${f(m.Qv,0)} J ／ ${f(m.Qp,0)} J`],
+      [`定積モル比熱 ${S("C")}<sub>V</sub> ＝ ${S("Q")}/(${S("n")}Δ${S("T")})`, `${f(Cv,1)} J/(mol·K) ＝ (3/2)${S("R")}`], [`定圧モル比熱 ${S("C")}<sub>p</sub>`, `${f(Cp,1)} J/(mol·K) ＝ (5/2)${S("R")}`], [`${S("C")}<sub>p</sub> − ${S("C")}<sub>V</sub>`, `${f(Cp - Cv,1)} J/(mol·K) ＝ ${S("R")}`]]));
+    ctx.eqs(`<p class="eq">同じ物質量の気体を、同じ強さで加熱して、同じ温度 Δ${S("T")} だけ上げる。内部エネルギーは温度だけで決まるので、どちらも Δ${S("U")} ＝ (3/2)${S("n")}${S("R")}Δ${S("T")}（紫の柱が同じ高さ）。</p><p class="eq"><b>定積</b>：${S("W")}′ ＝ 0 なので ${S("Q")} ＝ Δ${S("U")} ＝ (3/2)${S("n")}${S("R")}Δ${S("T")}、${S("C")}<sub>V</sub> ＝ (3/2)${S("R")}。<b>定圧</b>：おもりを持ち上げる仕事 ${S("W")}′ ＝ ${S("p")}Δ${S("V")} ＝ ${S("n")}${S("R")}Δ${S("T")} の分だけ多く熱が必要で、${S("Q")} ＝ (5/2)${S("n")}${S("R")}Δ${S("T")}、${S("C")}<sub>p</sub> ＝ (5/2)${S("R")}。</p><p class="eq">だから ${S("C")}<sub>p</sub> ＝ ${S("C")}<sub>V</sub> ＋ ${S("R")}（マイヤーの関係）、比 γ ＝ ${S("C")}<sub>p</sub>/${S("C")}<sub>V</sub> ＝ 5/3。同じ強さの加熱では、定圧のほうが温度の上がり方がゆっくり（グラフの傾きが 3/5）。</p>`);
+  },
+  asks:[
+    ["再生して、2つのシリンダーの温度の上がり方を比べよう。どちらが速く上がるか。", "定積。定圧では熱の一部がおもりを持ち上げる仕事に使われるので、温度の上がり方が遅い。"],
+    ["同じ ΔT になったとき、紫の柱（ΔU）の高さを比べよう。なぜそうなるか。", "同じ。内部エネルギーは温度だけで決まるから。"],
+    ["定圧で余分に必要な熱は、何に使われたか。その大きさは。", "外への仕事 W′ ＝ pΔV ＝ nRΔT（緑の柱）。"],
+    ["C_p − C_V はいくらか。", "R ＝ 8.3 J/(mol·K)（マイヤーの関係）。"],
+    ["ΔT を 2 倍にすると、必要な熱と C_V・C_p はどうなるか。", "熱は 2 倍になるが、モル比熱（1 mol・1 K あたり）は変わらない。"]
+  ]
+};
+function molarAt(P, t){
+  const nR = P.n*Rg, Qv = 1.5*nR*P.dT, Qp = 2.5*nR*P.dT, Ph = Qv/MT1, q = Ph*Math.max(0, t);
+  const qv = Math.min(q, Qv), qp = Math.min(q, Qp), Tv = 300 + qv/(1.5*nR), Tp = 300 + qp/(2.5*nR);
+  return {Ph, Qv:qv, Qp:qp, Tv, Tp, Vp:24.9*Tp/300, hv:q < Qv, hp:q < Qp};
+}
+
 /* ---------- p-V 図と状態変化（1 mol とは限らない、p₁V₁ ＝ nRT₁） ---------- */
 const PROC = {v:"定積変化", p:"定圧変化", T:"等温変化", a:"断熱変化"};
 function pvPath(P){
@@ -535,7 +764,7 @@ const cycle = {
   draw(ctx){ ctx.banner("熱機関のサイクルと熱効率のページへ移動します…", "--ui"); location.replace("heat-engine.html"); }
 };
 
-LAB.app({title:"気体分子ラボ", modes:{iso, isobar, kinetic, wall, piston, pv, cycle}});
+LAB.app({title:"気体分子ラボ", modes:{iso, isobar, isochore, adia, kinetic, wall, piston, pv, first, molar, cycle}});
 })();
 </script>
 </body>
