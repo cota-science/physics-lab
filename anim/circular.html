@@ -186,7 +186,7 @@ function trainSim(P){
   const a0 = aTr(TV0[P.motion]), ge0 = Math.hypot(G, a0), ue = [-a0/ge0, -G/ge0];   // はじめの見かけの重力の向き
   let s = {t:0, xt:0, vt:TV0[P.motion], ph:0, om:0, r:[0,0], v:[0,0], cut:false, landed:false};
   const phe = Math.atan2(-a0, G);
-  if(P.obj === "pend") s.ph = P.th0*Math.PI/180;
+  if(P.obj === "pend") s.ph = -P.th0*Math.PI/180;
   if(P.obj === "rest" || cut) s.ph = phe;
   if(P.obj === "spring"){ const re = P.L + m*ge0/P.k + P.A; s.r = [ue[0]*re, ue[1]*re]; }
   else s.r = [L*Math.sin(s.ph), -L*Math.cos(s.ph)];
@@ -242,7 +242,7 @@ function vsym(c, base, sub, x, y, col, px=13){
 }
 const train = {
   label:"電車の中のおもり",
-  params:[["a","電車の加速度の大きさ "+S("a"),0,9.8,0.1,"m/s²",1,3],["L","糸の長さ（ばねは自然の長さ）",0.5,2.2,0.05,"m",2,1.5],["th0","はじめの振れ角（電車に対して、前向き正）",-40,40,1,"°",0,0],
+  params:[["a","電車の加速度の大きさ "+S("a"),0,9.8,0.1,"m/s²",1,3],["L","糸の長さ（ばねは自然の長さ）",0.5,2.2,0.05,"m",2,1.5],["th0","はじめの振れ角 θ（鉛直から後ろ向き正）",-40,40,1,"°",0,0],
           ["m","おもりの質量 "+S("m"),0.1,2,0.05,"kg",2,0.5],["k","ばね定数 "+S("k"),5,100,1,"N/m",0,20],["A","ばねを引く長さ",0,0.4,0.01,"m",2,0.2]],
   selects:[["motion","電車の動き",[["acc","加速（前向き）"],["const","等速"],["dec","減速（止まったら停車）"]],"acc"],
            ["obj","おもり",[["pend","単振り子（はじめは電車に対して静止）"],["rest","傾いたつり合いの位置で静止"],["cut","つり合いで静止 → 1.5 s 後に糸を切る"],["spring","ばねでつるし、見かけの重力の向きに引いて放す"]],"pend"],
@@ -273,7 +273,7 @@ const train = {
     c.fillStyle = css("--surface2"); c.strokeStyle = ink2; c.lineWidth = 2; c.fillRect(X(-CAR), Y(3.0), 2*CAR*tf.s, 3.0*tf.s); c.strokeRect(X(-CAR), Y(3.0), 2*CAR*tf.s, 3.0*tf.s);
     [-2.2, -1.4, 1.4, 2.2].forEach(wx => disc(c, X(wx), Y(-0.22), 0.2*tf.s, null, ink2));
     c.fillStyle = ink2; c.fillRect(X(-0.25), Y(PIV) - 3, 0.5*tf.s, 3);
-    if(Math.abs(q.at) > 1e-9){ const sg = Math.sign(q.at), L = Math.min(1.8, 0.25*Math.abs(q.at) + 0.4); arrow(c, X(0.1*sg), Y(3.25), X((0.1 + L)*sg), Y(3.25), vel, 3); label(c, `電車の加速度 ${f(Math.abs(q.at),1)} m/s²`, X(-0.1*sg), Y(3.25), vel, sg > 0 ? "right" : "left", uiFont(11, true)); }
+    if(Math.abs(q.at) > 1e-9){ const sg = Math.sign(q.at), L = Math.min(1.8, 0.25*Math.abs(q.at) + 0.4); arrow(c, X(0.1*sg), Y(3.25), X((0.1 + L)*sg), Y(3.25), vel, 3); label(c, `電車の加速度 a ＝ ${f(q.at,1)} m/s²`, X(-0.1*sg), Y(3.25), vel, sg > 0 ? "right" : "left", uiFont(11, true)); }
     else label(c, q.vt > 1e-9 ? "電車は等速（加速度 0）" : "電車は止まっている", X(0), Y(3.25), ink2, "center", uiFont(11, true));
     // 見かけの重力の向き
     const ge = Math.hypot(G, q.at), ug = [-q.at/ge, -G/ge];
@@ -324,11 +324,11 @@ const train = {
     if(q.cut && !q.landed) msg = gv ? "地面から見ると：糸を切った瞬間の電車と同じ速度を初速とする放物運動（加速度は g だけ）" : "電車から見ると：見かけの重力 g′ の向きに、初速 0 の等加速度直線運動";
     else if(q.landed) msg = `床に落ちた：電車から見て、つり下げ点の真下から${f(Math.abs(q.r[0]), 2)} m ${q.r[0] < 0 ? "後ろ" : "前"}`;
     else if(Math.abs(q.at) < 1e-9) msg = "加速度 0：慣性力はなく、見かけの重力は g（鉛直下向き）。等速の電車の中は地上と同じ";
-    else msg = gv ? `地面から見ると：おもりは電車と同じ加速度で動く。張力の水平成分 ＝ m a` : `電車から見ると：慣性力 m a が${dirw}向き。見かけの重力 g′ ＝ ${f(ge,2)} m/s²、鉛直から${dirw}へ ${f(the,1)}°`;
+    else msg = gv ? `地面から見ると：おもりは電車と同じ加速度 a ＝ ${f(q.at,1)} m/s² で動く。張力の水平成分 ＝ m a` : `電車から見ると：慣性力 m a（a ＝ ${f(q.at,1)} m/s²）が${dirw}向き。見かけの重力 g′ ＝ ${f(ge,2)} m/s²、鉛直から${dirw}へ ${f(the,1)}°`;
     ctx.banner(msg, gv ? "--vel" : "--hl2");
     // グラフ
     const D = Sm.dur;
-    const g0 = P.obj === "spring" ? {title:"ばねの長さ", unit:"m", fn:o => Math.hypot(o.r[0], o.r[1])} : P.obj === "cut" ? {title:"おもりの位置 x（電車に対して）", unit:"m", fn:o => o.r[0]} : {title:"振れ角 θ（前向き正）", unit:"°", fn:o => o.ph*180/Math.PI};
+    const g0 = P.obj === "spring" ? {title:"ばねの長さ", unit:"m", fn:o => Math.hypot(o.r[0], o.r[1])} : P.obj === "cut" ? {title:"おもりの位置 x（電車に対して）", unit:"m", fn:o => o.r[0]} : {title:"振れ角 θ（鉛直から後ろ向き正）", unit:"°", fn:o => -o.ph*180/Math.PI};
     graph(ctx.graphs[0], {title:g0.title, unit:g0.unit, tmax:D, t, series:[{fn:s => g0.fn(sampleAt(Sm, s)), color:"--pos"}]});
     graph(ctx.graphs[1], {title:"水平の速度（地面から）", unit:"m/s", tmax:D, t, series:[{fn:s => sampleAt(Sm, s).vt, color:"--ink3", name:"電車"}, {fn:s => { const o = sampleAt(Sm, s); return o.vt + o.v[0]; }, color:"--pos", name:"おもり"}]});
     // 数値
@@ -340,7 +340,15 @@ const train = {
     if(meas) rows.push([`シミュレーションで測った周期`, `${f(meas, 3)} s${P.obj === "pend" ? "（振れが大きいほど少し長い）" : ""}`]);
     if(P.motion === "dec" && P.a > 0) rows.push([`電車が止まる時刻`, `${f(TV0.dec/P.a, 2)} s${TV0.dec/P.a < D ? "（そのあと慣性力 0）" : ""}`]);
     ctx.ro(table(rows));
-    ctx.eqs(`<p class="eq"><b>地面（慣性系）</b>：運動方程式 ${S("m")}${V("a")} ＝ ${V("T")} ＋ ${S("m")}${V("g")}。つり合いの位置でおもりが電車と同じ加速度 ${V("a")} で動くには、張力の水平成分が ${S("m")}${S("a")}、鉛直成分が ${S("m")}${S("g")}</p>
+    // いまの加速度での、傾いて静止するおもりの式（前向き正、θ は鉛直から後ろ向き正）
+    const aN = q.at, mN = P.m, Fs = P.obj === "spring" ? "F" : "T", thN = Math.atan2(aN, G)*180/Math.PI, TN = mN*Math.hypot(G, aN);
+    const aStr = aN < 0 ? `(${f(aN, 1)})` : f(aN, 1), mStr = f(mN, 2);
+    const conc = `<div class="eq" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6px 0">
+<p style="margin:2px 0"><b>傾いて静止しているとき</b>（${S("a")} ＝ ${f(aN, 1)} m/s²、前向き正。${S("θ")} は鉛直から後ろ向き正、${S("m")} ＝ ${mStr} kg、${S("g")} ＝ 9.8 m/s²）</p>
+<p style="margin:4px 0"><b style="color:var(--vel)">地面（慣性系）：運動方程式</b><br>水平：${S("m")}${S("a")} ＝ ${S(Fs)} sin ${S("θ")}　→　${mStr} × ${aStr} ＝ ${S(Fs)} sin ${S("θ")}<br>鉛直：${S("m")} × 0 ＝ ${S(Fs)} cos ${S("θ")} − ${S("m")}${S("g")}　→　${S(Fs)} cos ${S("θ")} ＝ ${mStr} × 9.8</p>
+<p style="margin:4px 0"><b style="color:var(--hl2)">電車（非慣性系）：慣性力を含む力のつり合い</b><br>水平：${S(Fs)} sin ${S("θ")} − ${S("m")}${S("a")} ＝ 0　→　${S(Fs)} sin ${S("θ")} − ${mStr} × ${aStr} ＝ 0<br>鉛直：${S(Fs)} cos ${S("θ")} − ${S("m")}${S("g")} ＝ 0　→　${S(Fs)} cos ${S("θ")} − ${mStr} × 9.8 ＝ 0</p>
+<p style="margin:4px 0">どちらも同じ2式。割って tan ${S("θ")} ＝ ${S("a")}/${S("g")} ＝ ${aStr}/9.8 ＝ ${f(aN/G, 3)}、${S("θ")} ＝ ${f(thN, 1)}°${Math.abs(aN) < 1e-9 ? "（鉛直）" : aN > 0 ? "（後ろへ）" : "（前へ）"}。2乗して足すと ${S(Fs)} ＝ ${S("m")}√(${S("g")}² ＋ ${S("a")}²) ＝ ${mStr} × ${f(Math.hypot(G, aN), 2)} ＝ <b>${f(TN, 2)} N</b></p></div>`;
+    ctx.eqs(conc + `<p class="eq"><b>地面（慣性系）</b>：運動方程式 ${S("m")}${V("a")} ＝ ${V("T")} ＋ ${S("m")}${V("g")}。つり合いの位置でおもりが電車と同じ加速度 ${V("a")} で動くには、張力の水平成分が ${S("m")}${S("a")}、鉛直成分が ${S("m")}${S("g")}</p>
 <p class="eq"><b>電車（非慣性系）</b>：慣性力 −${S("m")}${V("a")} を加えて ${V("T")} ＋ ${S("m")}${V("g")} ＋ (−${S("m")}${V("a")}) ＝ 0（つり合い）。重力と慣性力をまとめて<b>見かけの重力</b> ${S("m")}${V("g")}′、${V("g")}′ ＝ ${V("g")} − ${V("a")}、${S("g")}′ ＝ √(${S("g")}² ＋ ${S("a")}²)、tan θ ＝ ${S("a")}/${S("g")}</p>
 <p class="eq">見かけの重力の中では、重力 ${S("g")} を ${S("g")}′ に置きかえればよい：単振り子 ${S("T")} ＝ 2π√(${S("L")}/${S("g")}′)（短くなる）、ばね振り子 ${S("T")} ＝ 2π√(${S("m")}/${S("k")})（変わらない。つり合いの位置が ${S("m")}${S("g")}′/${S("k")} だけ伸びた所に移るだけ）、糸を切ると ${V("g")}′ の向きに初速 0 の等加速度直線運動</p>
 <p class="eq"><span class="tag c">微積</span>電車から見た振り子：${S("L")}${frac("d²"+S("θ"), "d"+S("t")+"²")} ＝ −${S("g")} sin ${S("θ")} − ${S("a")} cos ${S("θ")} ＝ −${S("g")}′ sin(${S("θ")} − ${S("θ")}<sub>0</sub>)（${S("θ")}<sub>0</sub> はつり合いの角）。小さな振れで単振動、ω ＝ √(${S("g")}′/${S("L")})</p>`);
