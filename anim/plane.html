@@ -160,6 +160,7 @@ details.ask summary{cursor:pointer;font-weight:700;color:var(--ui)}
 </div>
 </div>
 
+<script src="../js/italic.js"></script>
 <script>
 (function(){
 "use strict";
@@ -541,6 +542,8 @@ function loop(ts){
 readHash(); renderAsks(); recompute(); syncUI(); playing = true; draw();
 requestAnimationFrame(loop);
 })();
+
+if(window.ITALIC) window.ITALIC.auto("s");
 </script>
 </body>
 </html>

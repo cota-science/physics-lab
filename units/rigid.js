@@ -218,7 +218,7 @@ const SECTIONS = [
   ]}]
 },
 { id:"dim", advice:"モーメントは「力 × 長さ」。重心の式は「長さ」になるか確かめよう。", tab:"③次元", title:"③ 次元チェック",
-  intro:`力のモーメントは N·m、重心の座標は m。積分 ∫…d${x} は「× m」です。`,
+  intro:`力のモーメントは N·m、重心の座標は <span class='keep'>m</span>。積分 ∫…d${x} は「× m」です。`,
   ref:{label:"次元の表を見る", html:DIM_TABLE},
   groups:[
   { title:"A. 計算せずに単位を予測する", lead:`${F}〔N〕、${l}, ${x}〔m〕、${m}〔kg〕、${lam}〔kg/m〕とする。`, qs:[

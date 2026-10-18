@@ -413,5 +413,6 @@ document.addEventListener("keydown", e => {
   }
 });
 
+if(window.ITALIC) window.ITALIC.auto("qv", document.getElementById("main"));   // 本文中の物理量の文字を自動でイタリックに（js/italic.js）
 route();
 })();

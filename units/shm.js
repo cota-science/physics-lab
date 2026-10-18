@@ -157,7 +157,7 @@ const SECTIONS = [
   ]}]
 },
 { id:"dim", advice:"√(m/k) は時間。sin の中身（位相）は次元なし。", tab:"③次元", title:"③ 次元チェック",
-  intro:`k〔N/m〕＝ kg/s² なので √(${m}/${k}) は s。sin・cos の中身は次元のない量（rad）でなければなりません。`,
+  intro:`k〔N/m〕＝ kg/s² なので √(${m}/${k}) は <span class='keep'>s</span>。sin・cos の中身は次元のない量（rad）でなければなりません。`,
   ref:{label:"次元の表を見る", html:DIM_TABLE},
   groups:[
   { title:"A. 計算せずに単位を予測する", lead:`${m}〔kg〕、${k}〔N/m〕、${A}〔m〕、${w}〔rad/s〕、${L}〔m〕、${g}〔m/s²〕とする。`, qs:[

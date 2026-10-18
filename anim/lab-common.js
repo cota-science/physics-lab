@@ -24,6 +24,7 @@ const $ = id => document.getElementById(id);
 const f = (n, d=2) => { if(!isFinite(n)) return "—"; return (Math.abs(n) < 0.5*Math.pow(10,-d) ? 0 : n).toFixed(d).replace("-", "−"); };
 const S = s => `<span class="s">${s}</span>`;
 const V = s => `<span class="vb">${s}</span>`;
+const ital = el => { if(window.ITALIC && el) window.ITALIC.run(el, "s"); };   // 本文中の物理量の文字を自動でイタリックに（js/italic.js）
 function css(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 function prep(cv){
   const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
@@ -129,6 +130,7 @@ function app(cfg){
     $("toggles").querySelectorAll("input").forEach(el => el.addEventListener("change", e => { T[e.target.dataset.t] = e.target.checked; draw(); }));
     $("legend").innerHTML = m.legend || "";
     $("asks").innerHTML = (m.asks || []).map(a => `<li>${a[0]} <details><summary>答え</summary> ${a[1]}</details></li>`).join("");
+    ["ctrls", "toggles", "legend", "asks"].forEach(id => ital($(id)));
     $("timebar").hidden = !m.timed;
     $("stage").style.aspectRatio = m.aspect || "";
     const ng = m.graphs || 0; [0,1,2,3].forEach(i => { $("g"+i).hidden = i >= ng; $("g"+i).style.gridColumn = (m.wide || []).includes(i) ? "1 / -1" : ""; $("g"+i).style.aspectRatio = (m.wide || []).includes(i) ? "16 / 9" : ""; }); $("minis").hidden = ng === 0;
@@ -166,8 +168,9 @@ function app(cfg){
       banner:(txt, col) => { $("banner").textContent = txt || ""; $("banner").style.color = col ? (css(col) || col) : css("--ui"); }};
     $("banner").textContent = "";
     m.draw(ctx);
+    ital($("banner")); ital($("ro")); ital($("eqs"));
     if(m.timed){
-      $("tLabel").textContent = `t = ${f(t)} s`;
+      $("tLabel").textContent = `t = ${f(t)} s`; ital($("tLabel"));
       $("tSlider").value = dur > 0 ? Math.round(t/dur*1000) : 0;
       $("play").textContent = playing ? "❚❚ 停止" : (dur > 0 && t >= dur - 1e-9 ? "▶ もう一度" : "▶ 再生");
     }

@@ -85,7 +85,7 @@ const DIM_TABLE = `<div class="tbl"><table>
 <tr><td>速度 ${Q("v")}・${d("d"+x,"d"+t)}</td><td>m/s</td><td>〔L〕/〔T〕</td></tr>
 <tr><td>加速度 ${Q("a")}, ${g}・${d("d"+vy,"d"+t)}・${d("d²"+y,"d"+t+"²")}</td><td>m/s²</td><td>〔L〕/〔T〕²</td></tr>
 <tr><td>sin ${th}・cos ${th}・tan ${th}</td><td>なし</td><td>次元なし（比）</td></tr></table></div>
-<p style='font-size:14px;margin:6px 0'>${CALC} 微分 ${d("d"+Q("A"),"d"+t)} の単位は「${Q("A")} の単位 ÷ s」、積分 ∫${Q("A")} d${t} の単位は「${Q("A")} の単位 × s」。d${t} は時間（の小さな幅）なので s の次元をもつ。</p>`;
+<p style='font-size:14px;margin:6px 0'>${CALC} 微分 ${d("d"+Q("A"),"d"+t)} の単位は「${Q("A")} の単位 ÷ s」、積分 ∫${Q("A")} d${t} の単位は「${Q("A")} の単位 × s」。d${t} は時間（の小さな幅）なので <span class='keep'>s</span> の次元をもつ。</p>`;
 
 /* 放物運動のストロボと、速度ベクトルを1点から並べた図 */
 const HODO = `<svg class="graph" viewBox="0 0 340 190" role="img" aria-label="左：放物運動の5つの位置と速度ベクトル。右：その5本の速度ベクトルを1点から並べると、先端が鉛直な一直線上に等間隔に並ぶ">
