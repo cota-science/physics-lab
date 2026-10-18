@@ -300,8 +300,13 @@ const transfer = {
       c.globalAlpha = done ? 1 : 0.45;
       c.fillStyle = neg; c.save(); c.translate(px, py); c.rotate(Math.PI/4); c.fillRect(-4, -4, 8, 8); c.restore();
       arrow(c, px, py, px, py + dir*sgn*kd, neg, 2.8);
-      label(c, `${nm} ${dv >= 0 ? "加速" : "減速"} Δv ＝ ${f(Math.abs(dv)/1e3,2)} km/s`, px + (which === 1 ? 10 : -10), py + dir*sgn*kd*0.5 + (dir*sgn > 0 ? 10 : -10), neg, which === 1 ? "left" : "right", uiFont(11, true));
+      label(c, nm, px + (which === 1 ? 12 : -12), py + dir*sgn*kd*0.5, neg, which === 1 ? "left" : "right", uiFont(13, true));
       c.globalAlpha = 1;
+    });
+    // 噴射の Δv は図の左上にまとめて書く（せまい画面でもはみ出さない）
+    [[X.d1, "①", St.pos1], [X.d2, "②", St.pos2]].forEach(([dv, nm, done], i) => {
+      if(i === 1 && P.b2 !== "on") return;
+      label(c, `${nm} ${dv >= 0 ? "加速" : "減速"} Δv ＝ ${f(Math.abs(dv)/1e3,2)} km/s`, 8, 14 + i*16, neg, "left", uiFont(12, true));
     });
     // 目標の天体（到着点に、遷移にかかる時間後に着くように置く）
     if(T.tgt){
