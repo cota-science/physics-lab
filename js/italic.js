@@ -39,14 +39,15 @@ function convert(text){
       else if(w.length === 1 && UNITS.has(w) && (prevNum || linked || inBr && /〔|\[/.test(before))){ italic = false; unit = true; }
       else if(w.length === 1){
         if(/[a-z]/.test(w)){
-          if(w === "d"){ const nx = text.slice(j).match(/^\s*[＝=]/); italic = !!nx; }
+          if(w === "d"){ const nx = text.slice(j).match(/^(?:\s*[＝=]|-t)/); italic = !!nx; }
           else italic = true;
-        } else italic = UPPER.has(w) && !/点\s?$/.test(before) && !/^\s?点/.test(text.slice(j, j + 2)) && !/[A-Z][・、,]\s?$/.test(before) && !/^[・、,]\s?[A-Z](?![A-Za-z])/.test(text.slice(j, j + 3));
+        } else italic = (UPPER.has(w) || (w === "A" && /[+＋−-]$/.test(before))) && !/点\s?$/.test(before) && !/^\s?点/.test(text.slice(j, j + 2)) && !/[A-Z][・、,]\s?$/.test(before) && !/^[・、,]\s?[A-Z](?![A-Za-z])/.test(text.slice(j, j + 3));
       } else {
         // 2〜4字
-        if(/^(GM|RT)$/.test(w)) italic = true;
+        if(/^[NTFfWS][AB]$/.test(w)){ out += text.slice(last, i) + `<span class="@">${w[0]}</span>${w[1]}`; last = j; changed = true; prevUnit = false; prevEnd = j; continue; }
+        else if(/^(GM|RT)$/.test(w)) italic = true;
         else if(/^[A-Z]+$/.test(w)) italic = false;                       // AB など（点・粒子の名前）
-        else if(/^d[txyzvrm]$/.test(w)){ out += text.slice(last, i) + "d" + `<i class="@">${w[1]}</i>`; last = j; changed = true; prevUnit = false; prevEnd = j; continue; }
+        else if(/^d[txyzvrm]$/.test(w)){ out += text.slice(last, i) + "d" + `<span class="@">${w[1]}</span>`; last = j; changed = true; prevUnit = false; prevEnd = j; continue; }
         else italic = /^[mgakvtxyhrlnfpqe]+$/.test(w) || (/[a-z]/.test(w) && /[A-Z]/.test(w) && /^[mgakvtxyhrlnfpqeGMRTVUFELIKS]+$/.test(w));
       }
     } else {
@@ -54,7 +55,7 @@ function convert(text){
       italic = [...w].every(c => GREEK.has(c)) && !(w.length === 1 && w === "μ" && prevNum);
     }
     prevUnit = unit; prevEnd = j;
-    if(italic){ out += text.slice(last, i) + `<i class="@">${w}</i>`; last = j; changed = true; }
+    if(italic){ out += text.slice(last, i) + `<span class="@">${w}</span>`; last = j; changed = true; }
   }
   if(!changed) return null;
   return out + text.slice(last);
@@ -83,6 +84,49 @@ function run(root, cls){
   return k;
 }
 function scan(root){ return nodes(root).map(n => [n.nodeValue.trim().slice(0, 60), convert(n.nodeValue)]).filter(x => x[1]); }
+/* キャンバスの文字：通常フォントで描く文字列の中の物理量だけをイタリックで描きわける（図中の x-t〔m〕, S 5.87 N, a ＝ 3.0 m/s² など）。
+   ctx.font が最初から italic のとき（記号そのものを描く呼び出し）は何もしない。 */
+const segCache = new Map();
+function segs(text){
+  if(segCache.has(text)) return segCache.get(text);
+  let r = null;
+  const h = convert(text);
+  if(h != null){
+    r = []; const re = /<span class="@">([^<]*)<\/span>/g; let last = 0, m;
+    while((m = re.exec(h))){ if(m.index > last) r.push([h.slice(last, m.index), false]); r.push([m[1], true]); last = m.index + m[0].length; }
+    if(last < h.length) r.push([h.slice(last), false]);
+  }
+  if(segCache.size > 3000) segCache.clear();
+  segCache.set(text, r); return r;
+}
+function patchCanvas(){
+  if(typeof CanvasRenderingContext2D === "undefined" || CanvasRenderingContext2D.prototype.__italic) return;
+  const P = CanvasRenderingContext2D.prototype;
+  for(const fn of ["fillText", "strokeText"]){
+    const orig = P[fn];
+    P[fn] = function(text, x, y, mw){
+      const t = String(text), f0 = this.font;
+      if(!/[A-Za-zθφωαβγδελμρστηκνξζψϕ]/.test(t) || /italic|oblique/.test(f0)) return orig.call(this, text, x, y, mw);
+      let sg = [];
+      t.split(/(_[A-Za-z0-9′']+)/).forEach(part => {
+        if(/^_[A-Za-z0-9′']+$/.test(part)) sg.push([part.slice(1), "s"]);
+        else if(part){ const g = segs(part); if(g) g.forEach(x => sg.push([x[0], x[1] ? "i" : "r"])); else sg.push([part, "r"]); }
+      });
+      if(sg.length === 1 && sg[0][1] === "r") return orig.call(this, text, x, y, mw);
+      const al = this.textAlign, base = f0.replace(/\b(normal|italic|oblique)\s+/, ""), px = +(base.match(/([\d.]+)px/) || [0, 12])[1];
+      const fo = st => st === "i" ? "italic " + base : st === "s" ? base.replace(/[\d.]+px/, (px*0.75).toFixed(1) + "px") : base;
+      const ws = sg.map(([str, st]) => { this.font = fo(st); return this.measureText(str).width; });
+      const tot = ws.reduce((a, b) => a + b, 0);
+      let cx = al === "center" ? x - tot/2 : (al === "right" || al === "end") ? x - tot : x;
+      this.textAlign = "left";
+      sg.forEach(([str, st], k) => { this.font = fo(st); orig.call(this, str, cx, st === "s" ? y + px*0.25 : y); cx += ws[k]; });
+      this.textAlign = al; this.font = f0;
+    };
+  }
+  P.__italic = true;
+}
+patchCanvas();
+
 /* ページ全体を監視して、書きかわるたびに整形する（古い単独ページ用） */
 function auto(cls, root){
   root = root || document.body; let pend = false;

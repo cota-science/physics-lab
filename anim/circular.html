@@ -244,7 +244,7 @@ function vsym(c, base, sub, x, y, col, px=13){
 }
 const train = {
   label:"電車の中のおもり",
-  params:[["a","電車の加速度の大きさ "+S("a"),0,9.8,0.1,"m/s²",1,3],["L","糸の長さ（ばねは自然の長さ）",0.5,2.2,0.05,"m",2,1.5],["th0","はじめの振れ角 θ（鉛直から後ろ向き正）",-40,40,1,"°",0,0],
+  params:[["a","電車の加速度の大きさ "+S("a"),0,9.8,0.1,"m/s²",1,3],["L","糸の長さ（ばねは自然の長さ）",0.5,2.2,0.05,"m",2,1.5],["th0","はじめの振れ角 θ（後ろ向き正）",-40,40,1,"°",0,0],
           ["m","おもりの質量 "+S("m"),0.1,2,0.05,"kg",2,0.5],["k","ばね定数 "+S("k"),5,100,1,"N/m",0,20],["A","ばねを引く長さ",0,0.4,0.01,"m",2,0.2]],
   selects:[["motion","電車の動き",[["acc","加速（前向き）"],["const","等速"],["dec","減速（止まったら停車）"]],"acc"],
            ["obj","おもり",[["pend","単振り子（はじめは電車に対して静止）"],["rest","傾いたつり合いの位置で静止"],["cut","つり合いで静止 → 1.5 s 後に糸を切る"],["spring","ばねでつるし、見かけの重力の向きに引いて放す"]],"pend"],
@@ -330,7 +330,7 @@ const train = {
     ctx.banner(msg, gv ? "--vel" : "--hl2");
     // グラフ
     const D = Sm.dur;
-    const g0 = P.obj === "spring" ? {title:"ばねの長さ", unit:"m", fn:o => Math.hypot(o.r[0], o.r[1])} : P.obj === "cut" ? {title:"おもりの位置 x（電車に対して）", unit:"m", fn:o => o.r[0]} : {title:"振れ角 θ（鉛直から後ろ向き正）", unit:"°", fn:o => -o.ph*180/Math.PI};
+    const g0 = P.obj === "spring" ? {title:"ばねの長さ", unit:"m", fn:o => Math.hypot(o.r[0], o.r[1])} : P.obj === "cut" ? {title:"おもりの位置 x（電車に対して）", unit:"m", fn:o => o.r[0]} : {title:"振れ角 θ（後ろ向き正）", unit:"°", fn:o => -o.ph*180/Math.PI};
     graph(ctx.graphs[0], {title:g0.title, unit:g0.unit, tmax:D, t, series:[{fn:s => g0.fn(sampleAt(Sm, s)), color:"--pos"}]});
     graph(ctx.graphs[1], {title:"水平の速度（地面から）", unit:"m/s", tmax:D, t, series:[{fn:s => sampleAt(Sm, s).vt, color:"--ink3", name:"電車"}, {fn:s => { const o = sampleAt(Sm, s); return o.vt + o.v[0]; }, color:"--pos", name:"おもり"}]});
     // 数値

@@ -352,8 +352,8 @@ function ladderData(){
   const forces = [
     {n:"はしごの重力", sh:"W", at:G, F:[0, -P.W], col:"--acc"},
     {n:"人が押す力", sh:"w", at:H, F:[0, -P.w], col:"--acc"},
-    {n:"壁の垂直抗力 N<sub>B</sub>", sh:"NB", at:B, F:[-NB, 0], col:"--vel"},
-    {n:"床の垂直抗力 N<sub>A</sub>", sh:"NA", at:A, F:[0, NA], col:"--pos"},
+    {n:"壁の垂直抗力 N<sub>B</sub>", sh:"N_B", at:B, F:[-NB, 0], col:"--vel"},
+    {n:"床の垂直抗力 N<sub>A</sub>", sh:"N_A", at:A, F:[0, NA], col:"--pos"},
     {n:"床の摩擦力 f", sh:"f", at:A, F:[fr, 0], col:"--hl2"}
   ].filter(q => Math.hypot(q.F[0], q.F[1]) > 1e-9);
   const ax = {A, B, G}[P.ax];
