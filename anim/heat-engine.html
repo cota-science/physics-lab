@@ -120,16 +120,9 @@ tr.sum td{font-weight:700;border-top:2px solid var(--ink)}
 <main>
   <section class="sheet" aria-labelledby="t1">
     <h2 id="t1">気体を加熱・冷却して、ピストンを1往復させる</h2>
-    <p class="lead">シリンダーの気体を加熱して膨張させ、冷却して縮ませて、もとの状態に戻します（1サイクル）。この間に気体が外部にした正味の仕事と、吸収した熱量から、熱機関の熱効率を考えます。過程ごとに止まるので、確かめてから「次の過程 ▶」を押そう。</p>
+    <p class="lead" id="lead1">シリンダーの気体を加熱して膨張させ、冷却して縮ませて、もとの状態に戻します（1サイクル）。この間に気体が外部にした正味の仕事と、吸収した熱量から、熱機関の熱効率を考えます。過程ごとに止まるので、確かめてから「次の過程 ▶」を押そう。</p>
     <div class="stage"><canvas id="cv" role="img" aria-label="左にストッパーとおもりのついたシリンダー、中央に圧力と体積のグラフ、右に温度と体積のグラフ。サイクルの進み具合に合わせて、グラフの上の点が動く。"></canvas></div>
-    <div class="setrow">
-      <span>サイクルの大きさ：</span>
-      <label for="selP">おもりをのせたときの圧力 <i class="qv">p</i>₂
-        <select id="selP"><option value="1.5">1.5×10⁵ Pa</option><option value="2" selected>2.0×10⁵ Pa</option><option value="3">3.0×10⁵ Pa</option></select></label>
-      <label for="selV">上のストッパーの位置 <i class="qv">V</i>₂
-        <select id="selV"><option value="1.5">1.5 L</option><option value="2" selected>2.0 L</option><option value="3">3.0 L</option></select></label>
-      <span>（<i class="qv">p</i>₁ ＝ 1.0×10⁵ Pa、<i class="qv">V</i>₁ ＝ 1.0 L、<i class="qv">T</i><sub>A</sub> ＝ 300 K）</span>
-    </div>
+    <div class="setrow" id="setrow"></div>
 
     <ol class="chips" id="chips"></ol>
     <div class="step" id="step"><div class="no"></div><h3></h3><p class="txt"></p><div class="eq"></div></div>
@@ -154,7 +147,7 @@ tr.sum td{font-weight:700;border-top:2px solid var(--ink)}
 
   <section class="sheet" aria-labelledby="t3">
     <h2 id="t3">1サイクルで取り出せる仕事と熱効率</h2>
-    <div class="locked" id="locked">1サイクルを終える（段階 6 まで進む）と表示されます。</div>
+    <div class="locked" id="locked">1サイクルを終える（最後の段階まで進む）と表示されます。</div>
     <div class="eff" id="eff" hidden>
       <div class="why">
         <div><b>① 正味の仕事 ＝ p-V グラフが囲む面積</b><span id="w1"></span></div>
@@ -187,17 +180,43 @@ tr.sum td{font-weight:700;border-top:2px solid var(--ink)}
 const $ = id => document.getElementById(id), TAU = 2 * Math.PI;
 const I = s => `<i class="qv">${s}</i>`;
 const sub = (s, b) => `${I(s)}<sub>${b}</sub>`;
-(location.hash || "").replace(/^#/, "").split("&").forEach(kv => { const [a, b] = kv.split("="); if(a === "p2" && ["1.5","2","3"].includes(b)){ $("selP").value = b; } if(a === "V2" && ["1.5","2","3"].includes(b)){ $("selV").value = b; } });
+
 const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /* ---------- サイクルの状態（圧力：×10⁵ Pa、体積：L、pV の 1 ＝ 100 J） ---------- */
 const P1 = 1, V1 = 1, TA = 300;
-const S = { p2: +$("selP").value || 2, V2: +$("selV").value || 2, step: 0, s: 0, playing: false, speed: 1, maxStep: 0 };
+const S = { kind: "rect", TH: 600, r: 2, p2: 2, V2: 2, step: 0, s: 0, playing: false, speed: 1, maxStep: 0 };
 const TofPV = (p, V) => TA * p * V / (P1 * V1);
 const U = (p, V) => 1.5 * p * V * 100;
-const pts = () => ({ A: [V1, P1], B: [V1, S.p2], C: [S.V2, S.p2], D: [S.V2, P1] });
+const ptsR = () => ({ A: [V1, P1], B: [V1, S.p2], C: [S.V2, S.p2], D: [S.V2, P1] });
+const pts = () => { if(!CAR()) return ptsR(); const g = cg(); return { A: [1, g.pA], B: [g.VB, g.pB], C: [g.VC, g.pC], D: [g.VD, g.pD] }; };
 // 各段階の状態（s：0〜1）
-function stateAt(step, s){
+/* ---------- カルノーサイクル（等温膨張 → 断熱膨張 → 等温圧縮 → 断熱圧縮）：nR ＝ 1/3 J/K、pV の 1 ＝ 100 J、T ＝ 300pV ---------- */
+const TL = 300, CAR = () => S.kind === "carnot", LAST = () => CAR() ? 5 : 6;
+function cg(){ const q = Math.pow(S.TH / TL, 1.5), pA = S.TH / 300; return { pA, VB: S.r, pB: pA / S.r, VC: S.r * q, pC: 1 / (S.r * q), VD: q, pD: 1 / q }; }
+function carState(step, s){
+  const g = cg();
+  switch(step){
+    case 1: { const V = 1 + (g.VB - 1) * s; return { p: g.pA / V, V, w: 0, heat: s < 1 ? 1 : 0 }; }
+    case 2: { const V = g.VB + (g.VC - g.VB) * s; return { p: g.pB * Math.pow(g.VB / V, 5 / 3), V, w: 0, heat: 0 }; }
+    case 3: { const V = g.VC + (g.VD - g.VC) * s; return { p: 1 / V, V, w: 0, heat: s < 1 ? -1 : 0 }; }
+    case 4: { const V = g.VD + (1 - g.VD) * s; return { p: g.pD * Math.pow(g.VD / V, 5 / 3), V, w: 0, heat: 0 }; }
+    default: return { p: g.pA, V: 1, w: 0, heat: 0 };
+  }
+}
+function carEnergy(k, s){
+  const g = cg(), st = carState(k, s), T = 300 * st.p * st.V;
+  switch(k){
+    case 1: { const Q = S.TH / 3 * Math.log(st.V); return { Q, W: -Q, dU: 0 }; }
+    case 3: { const Q = TL / 3 * Math.log(st.V / g.VC); return { Q, W: -Q, dU: 0 }; }
+    case 2: { const dU = 0.5 * (T - S.TH); return { Q: 0, W: dU, dU }; }
+    case 4: { const dU = 0.5 * (T - TL); return { Q: 0, W: dU, dU }; }
+  }
+  return { Q: 0, W: 0, dU: 0 };
+}
+const stateAt = (k, s) => CAR() ? carState(k, s) : stateAtR(k, s);
+const energy = (k, s) => CAR() ? carEnergy(k, s) : energyR(k, s);
+function stateAtR(step, s){
   const p2 = S.p2, V2 = S.V2;
   switch(step){
     case 0: return { p: P1, V: V1, w: 1, heat: 0 };
@@ -210,7 +229,7 @@ function stateAt(step, s){
   }
 }
 // 過程ごとのエネルギー（s までの分）
-function energy(k, s){
+function energyR(k, s){
   const p2 = S.p2, V2 = S.V2, dV = (V2 - V1) * s;
   switch(k){
     case 1: { const dU = 1.5 * (p2 - P1) * s * V1 * 100; return { Q: dU, W: 0, dU }; }
@@ -220,9 +239,11 @@ function energy(k, s){
   }
   return { Q: 0, W: 0, dU: 0 };
 }
-const DUR = { 0: 0, 1: 3.2, 2: 4, 3: 1.6, 4: 3.2, 5: 4, 6: 1.6 };
-const COLOR = { 0: "ink", 1: "heat", 2: "heat", 3: "muted", 4: "cool", 5: "cool", 6: "muted" };
-const NAMES = ["初期状態 A", "A→B 加熱・定積", "B→C 加熱・定圧", "C で静止", "C→D 冷却・定積", "D→A 冷却・定圧", "A に戻る"];
+const DURC = { 0: 0, 1: 4, 2: 3.2, 3: 4, 4: 3.2, 5: 1.4 }, COLORC = { 0: "ink", 1: "heat", 2: "work", 3: "cool", 4: "work", 5: "muted" };
+const NAMESC = ["初期状態 A", "A→B 等温膨張", "B→C 断熱膨張", "C→D 等温圧縮", "D→A 断熱圧縮", "A に戻る"];
+const DURR = { 0: 0, 1: 3.2, 2: 4, 3: 1.6, 4: 3.2, 5: 4, 6: 1.6 };
+const COLORR = { 0: "ink", 1: "heat", 2: "heat", 3: "muted", 4: "cool", 5: "cool", 6: "muted" };
+const NAMESR = ["初期状態 A", "A→B 加熱・定積", "B→C 加熱・定圧", "C で静止", "C→D 冷却・定積", "D→A 冷却・定圧", "A に戻る"];
 
 /* ---------- 粒子（見た目：速さ ∝ √T） ---------- */
 const NP = 36, parts = [];
@@ -246,7 +267,10 @@ function hatch(x0, y0, x1, y1, color, dir, alpha){
   ctx.globalAlpha = alpha || .8; ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath(); const hh = yb - ya;
   for(let x = xa - hh - 10; x < xb + 10; x += 8){ if(dir > 0){ ctx.moveTo(x, yb); ctx.lineTo(x + hh, ya); } else { ctx.moveTo(x, ya); ctx.lineTo(x + hh, yb); } }
   ctx.stroke(); ctx.restore(); }
+const nice = x => { const st = x > 12 ? 2 : x > 6 ? 1 : 0.5; return Math.ceil(x / st) * st; };
+const tl = mx => { const st = [0.25, 0.5, 1, 2, 5, 10].find(v => v >= mx / 5), o = []; for(let v = st; v < mx * 0.999; v += st) o.push(+v.toFixed(2)); return o; };
 const axes = () => {
+  if(CAR()){ const g = cg(); return { Vmax: nice(g.VC * 1.1), Pmax: nice(g.pA * 1.2), Tmax: Math.ceil(S.TH * 1.15 / 300) * 300 }; }
   const Vmax = S.V2 >= 3 ? 3.5 : 2.5, Pmax = S.p2 >= 3 ? 3.5 : 2.5, Tc = TofPV(S.p2, S.V2), Tmax = Math.ceil(Tc * 1.15 / 300) * 300;
   return { Vmax, Pmax, Tmax };
 };
@@ -266,7 +290,8 @@ function draw(){
   drawCyl(st); drawPV(st); drawTV(st);
   if(!LY.wide) drawInfo(st);
 }
-function drawCyl(st){
+function drawCyl(st){ return CAR() ? drawCylc(st) : drawCylR(st); }
+function drawCylR(st){
   const c = LY.cyl, ax = axes();
   const top = c.y + 46, bot = c.y + c.h - 40, ih = bot - top, cw = Math.min(c.w * .66, 120), cx = c.x + (c.w - cw) / 2;
   const Yv = V => bot - V / ax.Vmax * ih, yp = Yv(st.V);
@@ -315,10 +340,12 @@ function graphFrame(g, xmax, ymax, xticks, yticks, xlab, ylab, yfmt){
   T(ylab, g.x - 4, g.y - 20, col.muted, 11, "left"); T(xlab, g.x + g.w, g.y + g.h + 27, col.muted, 11, "right");
   return { X, Y };
 }
-const segColor = k => col[COLOR[k]];
+const DURX = () => CAR() ? DURC : DURR, COLORX = () => CAR() ? COLORC : COLORR, NAMESX = () => CAR() ? NAMESC : NAMESR;
+const segColor = k => col[COLORX()[k]];
 // 経路（段階 k の途中まで）
 function pathPts(k, s, fn){ const out = []; const n = 20; for(let i = 0; i <= n; i++){ const st = stateAt(k, s * i / n); out.push(fn(st)); } return out; }
-function drawPV(st){
+function drawPV(st){ return CAR() ? drawPVc(st) : drawPVR(st); }
+function drawPVR(st){
   const ax = axes(), g = LY.pv;
   const { X, Y } = graphFrame(g, ax.Vmax, ax.Pmax, ax.Vmax > 3 ? [1, 2, 3] : [0.5, 1, 1.5, 2, 2.5].filter(v => v <= ax.Vmax), ax.Pmax > 3 ? [1, 2, 3] : [0.5, 1, 1.5, 2, 2.5], "体積 V〔L〕", "圧力 p〔×10⁵ Pa〕", v => v.toFixed(1));
   const P = pts(), x1 = X(V1), x2 = X(S.V2), yp1 = Y(P1), yp2 = Y(S.p2), y0 = Y(0);
@@ -345,7 +372,8 @@ function drawPV(st){
   if(S.step === 5){ const e5 = energy(5, S.s); TB(`された仕事 ${Math.round(e5.W)} J`, (X(st.V) + x2) / 2, (yp1 + y0) / 2, col.cool, fs, "center"); TB(`した仕事 ${Math.round(-energy(2, 1).W)} J`, (x1 + x2) / 2, (yp2 + yp1) / 2, col.wout, fs, "center"); }
   if(done){ const wn = Math.round((S.p2 - P1) * (S.V2 - V1) * 100); TB(`正味の仕事 ${wn} J`, (x1 + x2) / 2, (yp1 + yp2) / 2, col.net, fs + 1, "center"); TB(`打ち消し合う部分`, (x1 + x2) / 2, (yp1 + y0) / 2, col.muted, fs, "center"); }
 }
-function drawTV(st){
+function drawTV(st){ return CAR() ? drawTVc(st) : drawTVR(st); }
+function drawTVR(st){
   const ax = axes(), g = LY.tv, tstep = ax.Tmax > 1800 ? 600 : 300;
   const ticks = []; for(let v = tstep; v <= ax.Tmax; v += tstep) ticks.push(v);
   const { X, Y } = graphFrame(g, ax.Vmax, ax.Tmax, ax.Vmax > 3 ? [1, 2, 3] : [0.5, 1, 1.5, 2, 2.5].filter(v => v <= ax.Vmax), ticks, "体積 V〔L〕", "温度 T〔K〕");
@@ -372,12 +400,13 @@ function drawInfo(st){
 // これまでの合計
 function cum(){
   let qin = 0, qout = 0, wout = 0;
-  [1, 2, 4, 5].forEach(k => { if(S.step < k) return; const e = energy(k, S.step === k ? S.s : 1); if(e.Q > 0) qin += e.Q; else qout += -e.Q; wout += -e.W; });
+  (CAR() ? [1, 2, 3, 4] : [1, 2, 4, 5]).forEach(k => { if(S.step < k) return; const e = energy(k, S.step === k ? S.s : 1); if(e.Q > 0) qin += e.Q; else qout += -e.Q; wout += -e.W; });
   return { qin, qout, wout };
 }
 
 /* ---------- 文章 ---------- */
-function stepText(){
+function stepText(){ return CAR() ? carText() : stepTextR(); }
+function stepTextR(){
   const p2 = S.p2.toFixed(1), V2 = S.V2.toFixed(1), e1 = energy(1, 1), e2 = energy(2, 1), e4 = energy(4, 1), e5 = energy(5, 1);
   const r = n => Math.round(n), sg = n => (n > 0 ? "＋" : n < 0 ? "−" : "") + Math.abs(Math.round(n));
   return [
@@ -399,28 +428,30 @@ function stepText(){
 }
 function ui(){
   const ST = stepText(), k = S.step;
-  $("chips").innerHTML = NAMES.map((n, i) => `<li class="${i === k ? "cur" : i < k ? "done" : ""}" style="--c:var(--${COLOR[i] === "ink" || COLOR[i] === "muted" ? "blue" : COLOR[i]})">${i} ${n}</li>`).join("");
-  const el = $("step"); el.style.setProperty("--c", `var(--${COLOR[k] === "ink" || COLOR[k] === "muted" ? "blue" : COLOR[k]})`);
-  el.querySelector(".no").textContent = `段階 ${k} ／ 6${S.playing ? "（再生中）" : DUR[k] ? "（止まっています。確かめたら次へ）" : ""}`;
+  $("chips").innerHTML = NAMESX().map((n, i) => `<li class="${i === k ? "cur" : i < k ? "done" : ""}" style="--c:var(--${COLORX()[i] === "ink" || COLORX()[i] === "muted" ? "blue" : COLORX()[i]})">${i} ${n}</li>`).join("");
+  const el = $("step"); el.style.setProperty("--c", `var(--${COLORX()[k] === "ink" || COLORX()[k] === "muted" ? "blue" : COLORX()[k]})`);
+  el.querySelector(".no").textContent = `段階 ${k} ／ ${LAST()}${S.playing ? "（再生中）" : DURX()[k] ? "（止まっています。確かめたら次へ）" : ""}`;
   el.querySelector("h3").textContent = ST[k].h; el.querySelector(".txt").innerHTML = ST[k].t; el.querySelector(".eq").innerHTML = ST[k].eq;
   $("prevBtn").disabled = k === 0;
-  $("nextBtn").textContent = k === 6 ? "もう1サイクル ↻" : "次の過程 ▶";
+  $("nextBtn").textContent = k === LAST() ? "もう1サイクル ↻" : "次の過程 ▶";
   $("nextBtn").disabled = S.playing;
   table(); eff();
 }
 function table(){
-  const rows = [[1, "A→B 定積（加熱）"], [2, "B→C 定圧（加熱・膨張）"], [4, "C→D 定積（冷却）"], [5, "D→A 定圧（冷却・圧縮）"]];
-  const f = v => { const r = Math.round(v); return `<span class="${r > 0 ? "pos" : r < 0 ? "neg" : ""}">${r > 0 ? "＋" : r < 0 ? "−" : ""}${Math.abs(r)}</span>`; };
+  const rows = CAR() ? [[1, "A→B 等温膨張（高温熱源）"], [2, "B→C 断熱膨張"], [3, "C→D 等温圧縮（低温熱源）"], [4, "D→A 断熱圧縮"]] : [[1, "A→B 定積（加熱）"], [2, "B→C 定圧（加熱・膨張）"], [4, "C→D 定積（冷却）"], [5, "D→A 定圧（冷却・圧縮）"]];
+  const dg = CAR() ? 1 : 0, f = v => { const r = +v.toFixed(dg); return `<span class="${r > 0 ? "pos" : r < 0 ? "neg" : ""}">${r > 0 ? "＋" : r < 0 ? "−" : ""}${Math.abs(r).toFixed(dg)}</span>`; };
   let h = "", sQ = 0, sW = 0, sU = 0;
   rows.forEach(([k, n]) => {
     if(S.step < k){ h += `<tr class="pend"><td>${n}</td><td>?</td><td>?</td><td>?</td></tr>`; return; }
     const e = energy(k, S.step === k ? S.s : 1); sQ += e.Q; sW += e.W; sU += e.dU;
     h += `<tr class="${S.step === k ? "cur" : ""}"><td>${n}</td><td>${f(e.Q)}</td><td>${f(e.W)}</td><td>${f(e.dU)}</td></tr>`;
   });
-  if(S.step >= 6) h += `<tr class="sum"><td>1サイクルの合計</td><td>${f(sQ)}</td><td>${f(sW)}</td><td>${f(sU)}</td></tr>`;
+  if(S.step >= LAST()) h += `<tr class="sum"><td>1サイクルの合計</td><td>${f(sQ)}</td><td>${f(sW)}</td><td>${f(sU)}</td></tr>`;
   $("tb").innerHTML = h;
 }
 function eff(){
+  if(CAR()) return carEff();
+  restoreEff();
   const on = S.step >= 6; $("eff").hidden = !on; $("locked").hidden = on; if(!on) return;
   const e1 = energy(1, 1), e2 = energy(2, 1), e4 = energy(4, 1), e5 = energy(5, 1);
   const qin = e1.Q + e2.Q, qout = -(e4.Q + e5.Q), w = -(e2.W + e5.W), e = w / qin, r = Math.round;
@@ -433,19 +464,152 @@ function eff(){
   $("w4").innerHTML = `1サイクルでは ${sub("Q", "in")} − ${sub("Q", "out")} ＝ ${I("W")}′ が必ず成り立つので、(${I("W")}′) ÷ (${sub("Q", "in")} − ${sub("Q", "out")}) は、どんな熱機関でもいつも 1 になってしまいます。これでは熱機関の性能を比べられません。「受け取った熱のうち、どれだけを仕事にできたか」を表すには、分母は ${sub("Q", "in")} でなければなりません。`;
 }
 
+/* ---------- カルノーサイクルの描画・文章 ---------- */
+function hatchPoly(poly, color, dir, alpha){
+  if(poly.length < 3) return;
+  ctx.save(); ctx.beginPath(); poly.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.clip();
+  const xs = poly.map(q => q[0]), ys = poly.map(q => q[1]), xa = Math.min(...xs), xb = Math.max(...xs), ya = Math.min(...ys), yb = Math.max(...ys), hh = yb - ya;
+  ctx.fillStyle = color; ctx.globalAlpha = alpha === undefined ? .1 : alpha; ctx.fillRect(xa, ya, xb - xa, hh);
+  ctx.globalAlpha = .8; ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath();
+  for(let x = xa - hh - 10; x < xb + 10; x += 8){ if(dir > 0){ ctx.moveTo(x, yb); ctx.lineTo(x + hh, ya); } else { ctx.moveTo(x, ya); ctx.lineTo(x + hh, yb); } }
+  ctx.stroke(); ctx.restore();
+}
+function drawCylc(st){
+  const c = LY.cyl, ax = axes();
+  const top = c.y + 46, bot = c.y + c.h - 40, ih = bot - top, cw = Math.min(c.w * .66, 120), cx = c.x + (c.w - cw) / 2;
+  const Yv = V => bot - V / ax.Vmax * ih, yp = Yv(st.V);
+  const Tn = TofPV(st.p, st.V), heatK = Math.min(1, (Tn - 200) / (ax.Tmax - 200));
+  ctx.save(); ctx.fillStyle = col.heat; ctx.globalAlpha = .05 + .22 * heatK; ctx.fillRect(cx, yp, cw, bot - yp); ctx.restore();
+  const rr = Math.max(2.2, cw * .028);
+  parts.forEach(p => { ctx.save(); ctx.fillStyle = col.ink; ctx.globalAlpha = .7; ctx.beginPath(); ctx.arc(cx + rr + p.x * (cw - 2 * rr), bot - rr - p.y * (bot - yp - 2 * rr), rr, 0, TAU); ctx.fill(); ctx.restore(); });
+  L([[cx, top - 4], [cx, bot]], col.ink, 2.5); L([[cx + cw, top - 4], [cx + cw, bot]], col.ink, 2.5); L([[cx - 4, bot], [cx + cw + 4, bot]], col.ink, 2.5);
+  ctx.save(); ctx.fillStyle = col.muted; ctx.fillRect(cx + 2, yp - 9, cw - 4, 9); ctx.restore();
+  // 熱源・断熱材
+  const kind = S.step === 1 ? "H" : S.step === 3 ? "L" : (S.step === 2 || S.step === 4) ? "I" : "";
+  if(kind){
+    const bx = cx - 6, bw = cw + 12, by = bot + 3, bh = 14;
+    if(kind === "I"){ ctx.save(); ctx.fillStyle = col.muted; ctx.globalAlpha = .25; ctx.fillRect(bx, by, bw, bh); ctx.restore(); hatchPoly([[bx, by], [bx + bw, by], [bx + bw, by + bh], [bx, by + bh]], col.muted, 1, 0); T("断熱（Q ＝ 0）", cx + cw / 2, bot + 32, col.muted, 12, "center", true); }
+    else { ctx.save(); ctx.fillStyle = kind === "H" ? col.heat : col.cool; ctx.fillRect(bx, by, bw, bh); ctx.restore(); T(kind === "H" ? `高温熱源 ${S.TH} K` : `低温熱源 ${TL} K`, cx + cw / 2, bot + 32, kind === "H" ? col.heat : col.cool, 12, "center", true); }
+  }
+  if(st.heat !== 0){ const cc = st.heat > 0 ? col.heat : col.cool; for(let k = 1; k <= 3; k++){ const x = cx + cw * k / 4; st.heat > 0 ? arrow(x, bot + 2, x, bot - 18, cc, 2.4) : arrow(x, bot - 18, x, bot + 2, cc, 2.4); } }
+  const moving = S.step >= 1 && S.step <= 4 && S.s > 0 && S.s < 1, up = S.step <= 2;
+  if(moving){ arrow(cx + cw + 16, yp + (up ? 8 : -22), cx + cw + 16, yp + (up ? -22 : 8), col.work, 2.4); T("ゆっくり", cx + cw + 8, yp - 32, col.work, 11, "left", true); }
+  T(`p ＝ ${st.p.toFixed(2)}×10⁵ Pa`, c.x + c.w / 2, c.y + 8, col.ink, 12, "center", true);
+  T(`T ＝ ${Math.round(Tn)} K`, c.x + c.w / 2, c.y + 26, col.heat, 12, "center", true);
+}
+function carTrace(ks){ const out = []; ks.forEach(k => { if(S.step < k) return; const s = S.step === k ? S.s : 1; for(let i = 0; i <= 24; i++){ const q = carState(k, s * i / 24); out.push([q.V, q.p]); } }); return out; }
+function drawPVc(st){
+  const ax = axes(), g = LY.pv;
+  const { X, Y } = graphFrame(g, ax.Vmax, ax.Pmax, tl(ax.Vmax), tl(ax.Pmax), "体積 V〔L〕", "圧力 p〔×10⁵ Pa〕", v => v.toFixed(1)), y0 = Y(0), fs = g.w < 260 ? 10 : 11;
+  const ex = carTrace([1, 2]), co = carTrace([3, 4]), mp = q => [X(q[0]), Y(q[1])], under = a => a.length ? [[X(a[0][0]), y0], ...a.map(mp), [X(a[a.length - 1][0]), y0]] : [];
+  const cen = a => [a.reduce((u, q) => u + q[0], 0) / a.length, a.reduce((u, q) => u + q[1], 0) / a.length];
+  const done = S.step === 5;
+  if(!done){ hatchPoly(under(ex), col.wout, 1); hatchPoly(under(co), col.cool, -1); }
+  if(done){ const poly = carTrace([1, 2, 3, 4]).map(mp); ctx.save(); ctx.fillStyle = col.net; ctx.globalAlpha = .3 + .3 * S.s; ctx.beginPath(); poly.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.closePath(); ctx.fill(); ctx.restore(); }
+  for(let k = 1; k <= 4; k++){
+    if(S.step < k){ L(pathPts(k, 1, s => [X(s.V), Y(s.p)]), col.line, 1.5, [4, 4]); continue; }
+    const s = S.step === k ? S.s : 1; L(pathPts(k, s, s2 => [X(s2.V), Y(s2.p)]), segColor(k), 3.2);
+    if(s > .55){ const a = carState(k, .5), b = carState(k, .56); arrow(X(a.V), Y(a.p), X(b.V), Y(b.p), segColor(k), 3); }
+  }
+  Object.entries(pts()).forEach(([n, [v, p]]) => { ctx.save(); ctx.fillStyle = col.ink; ctx.beginPath(); ctx.arc(X(v), Y(p), 3.5, 0, TAU); ctx.fill(); ctx.restore();
+    T(n, X(v) + (n === "A" || n === "D" ? -10 : 10), Y(p) + (n === "A" || n === "B" ? -12 : -12), col.ink, 14, "center", true); });
+  ctx.save(); ctx.fillStyle = col.red; ctx.strokeStyle = col.sheet; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(X(st.V), Y(st.p), 6.5, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
+  if(!done && S.step >= 1){ const w1 = -(carEnergy(1, S.step === 1 ? S.s : 1).W + (S.step >= 2 ? carEnergy(2, S.step === 2 ? S.s : 1).W : 0)); const c1 = cen(ex); TB(`した仕事 ${w1.toFixed(0)} J`, X(c1[0]), Y(c1[1] / 2), col.wout, fs, "center"); }
+  if(!done && S.step >= 3){ const w2 = carEnergy(3, S.step === 3 ? S.s : 1).W + (S.step >= 4 ? carEnergy(4, S.step === 4 ? S.s : 1).W : 0); const c2 = cen(co); TB(`された仕事 ${w2.toFixed(0)} J`, X(c2[0]), Y(c2[1] / 3), col.cool, fs, "center"); }
+  if(done){ const poly = carTrace([1, 2, 3, 4]), c3 = cen(poly), wn = -(carEnergy(1, 1).W + carEnergy(2, 1).W + carEnergy(3, 1).W + carEnergy(4, 1).W); TB(`正味の仕事 ${wn.toFixed(1)} J`, X(c3[0]), Y(c3[1]), col.net, fs + 1, "center"); }
+}
+function drawTVc(st){
+  const ax = axes(), g = LY.tv, tstep = ax.Tmax > 1800 ? 600 : 300, ticks = []; for(let v = tstep; v <= ax.Tmax; v += tstep) ticks.push(v);
+  const { X, Y } = graphFrame(g, ax.Vmax, ax.Tmax, tl(ax.Vmax), ticks, "体積 V〔L〕", "温度 T〔K〕");
+  [S.TH, TL].forEach(t => L([[X(0), Y(t)], [X(ax.Vmax), Y(t)]], col.line, 1.4, [6, 4]));
+  for(let k = 1; k <= 4; k++){
+    const f = s2 => [X(s2.V), Y(TofPV(s2.p, s2.V))];
+    if(S.step < k){ L(pathPts(k, 1, f), col.line, 1.5, [4, 4]); continue; }
+    const s = S.step === k ? S.s : 1; L(pathPts(k, s, f), segColor(k), 3.2);
+    if(s > .55){ const a = carState(k, .5), b = carState(k, .56); arrow(...f(a), ...f(b), segColor(k), 3); }
+  }
+  Object.entries(pts()).forEach(([n, [v, p]]) => { const t = TofPV(p, v); ctx.save(); ctx.fillStyle = col.ink; ctx.beginPath(); ctx.arc(X(v), Y(t), 3.5, 0, TAU); ctx.fill(); ctx.restore();
+    const wide = g.w >= 260, left = n === "A" || n === "D", y = Y(t) + (t > 300 ? -12 : 13);
+    wide ? TB(`${n}（${Math.round(t)} K）`, X(v) + (left ? 6 : -6), y, col.ink, 12, left ? "right" : "left") : T(n, X(v) + (left ? -9 : 9), y, col.ink, 14, "center", true); });
+  ctx.save(); ctx.fillStyle = col.red; ctx.strokeStyle = col.sheet; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(X(st.V), Y(TofPV(st.p, st.V)), 6.5, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
+}
+function carText(){
+  const g = cg(), TH = S.TH, r = S.r, e1 = carEnergy(1, 1), e2 = carEnergy(2, 1), e3 = carEnergy(3, 1), e4 = carEnergy(4, 1);
+  const n1 = v => Math.abs(v).toFixed(1), sg = v => (v > 0.05 ? "＋" : v < -0.05 ? "−" : "") + Math.abs(v).toFixed(1), th = sub("T", "H"), tlow = sub("T", "L"), nR = `${I("n")}${I("R")}`;
+  return [
+    { h: "初期状態 A", t: `シリンダーの気体に、<b>高温熱源</b>（${th} ＝ ${TH} K）と<b>低温熱源</b>（${tlow} ＝ ${TL} K）を用意します。ピストンは外から加える力を調節して<b>ゆっくり</b>動かし、気体の圧力と外の圧力がいつもほぼつり合うようにします（準静的な変化）。状態 A は、気体の温度が ${th} に等しい状態です。`,
+      eq: `状態 A：${I("p")} ＝ ${g.pA.toFixed(2)}×10⁵ Pa、${I("V")} ＝ 1.0 L、${I("T")} ＝ ${TH} K、${I("U")} ＝ ${Math.round(U(g.pA, 1))} J（${nR} ＝ 1/3 J/K）` },
+    { h: "A→B 等温膨張", t: `高温熱源に接触させたまま、ゆっくり膨張させます。温度が一定なので内部エネルギーは変わらず（Δ${I("U")} ＝ 0）、気体が外にした仕事 ${I("W")}′ と同じだけの熱を高温熱源から吸収します。p-V グラフでは ${I("p")}${I("V")} ＝ 一定の曲線（等温線）です。`,
+      eq: `${I("Q")} ＝ ${I("W")}′ ＝ ${nR}${th} log<sub>e</sub>(${sub("V", "B")}/${sub("V", "A")}) ＝ ${sg(e1.Q)} J（${sub("V", "B")} ＝ ${r.toFixed(1)} L、${I("p")}-${I("V")} 図の面積を積分で求めた結果）` },
+    { h: "B→C 断熱膨張", t: `熱源から離して断熱材で囲み、さらにゆっくり膨張させます。熱の出入りがない（${I("Q")} ＝ 0）ので、気体が外にした仕事の分だけ内部エネルギーが減り、温度が ${th} から ${tlow} まで下がります。断熱変化では ${I("T")}${I("V")}<sup>2/3</sup> ＝ 一定（単原子分子、${I("p")}${I("V")}<sup>5/3</sup> ＝ 一定）。`,
+      eq: `${I("Q")} ＝ 0、Δ${I("U")} ＝ ${sg(e2.dU)} J、${I("W")}′ ＝ −Δ${I("U")} ＝ ${n1(e2.W)} J、温度 ${TH} K → ${TL} K、${sub("V", "C")} ＝ ${sub("V", "B")}(${th}/${tlow})<sup>3/2</sup> ＝ ${g.VC.toFixed(2)} L` },
+    { h: "C→D 等温圧縮", t: `低温熱源に接触させ、外からゆっくり押して縮めます。温度が一定なので Δ${I("U")} ＝ 0。外からされた仕事と同じだけの熱を、低温熱源に<b>捨てます</b>。D は、次の断熱圧縮でちょうど A の温度・体積に戻る点に選んであり、${sub("V", "C")}/${sub("V", "D")} ＝ ${sub("V", "B")}/${sub("V", "A")} ＝ ${r.toFixed(1)} になります。`,
+      eq: `${I("Q")} ＝ −${nR}${tlow} log<sub>e</sub>(${sub("V", "C")}/${sub("V", "D")}) ＝ ${sg(e3.Q)} J（${n1(e3.Q)} J を放出）、${sub("V", "D")} ＝ ${g.VD.toFixed(2)} L` },
+    { h: "D→A 断熱圧縮", t: `再び断熱材で囲み、ゆっくり圧縮します。熱の出入りはなく、外からされた仕事の分だけ内部エネルギーが増えて、温度が ${tlow} から ${th} までもどります。`,
+      eq: `${I("Q")} ＝ 0、Δ${I("U")} ＝ ${I("W")} ＝ ${sg(e4.dU)} J（された仕事）、温度 ${TL} K → ${TH} K` },
+    { h: "A に戻る ＝ 1サイクル", t: `状態がもとにもどりました。B→C と D→A の断熱の過程では、温度変化に使った内部エネルギーの出入りが打ち消し合います。正味の仕事は、等温膨張で吸収した熱と、等温圧縮で捨てた熱の差です。下の「熱効率」を見よう。`,
+      eq: `正味の仕事 ${I("W")}′ ＝ ${sub("Q", "in")} − ${sub("Q", "out")} ＝ ${n1(e1.Q)} − ${n1(e3.Q)} ＝ ${n1(e1.Q + e3.Q)} J ＝ p-V グラフが囲む面積` }
+  ];
+}
+function carEff(){
+  const on = S.step >= 5; $("eff").dataset.k = "c"; $("eff").hidden = !on; $("locked").hidden = on; if(!on){ return; }
+  const e1 = carEnergy(1, 1), e3 = carEnergy(3, 1), qin = e1.Q, qout = -e3.Q, w = qin - qout, e = w / qin, ec = 1 - TL / S.TH, th = sub("T", "H"), tlow = sub("T", "L"), nR = `${I("n")}${I("R")}`, d = v => v.toFixed(1);
+  $("eff").innerHTML = `<div class="why">
+    <div><b>① 正味の仕事 ＝ p-V グラフが囲む面積 ＝ ${sub("Q", "in")} − ${sub("Q", "out")}</b>1サイクルでは Δ${I("U")} ＝ 0 なので、吸収した熱 ${d(qin)} J と捨てた熱 ${d(qout)} J の差 ${d(w)} J が、外に取り出せた正味の仕事 ${I("W")}′ です。</div></div>
+    <div class="flow"><div class="lab"><span>吸収した熱量 ${sub("Q", "in")}（A→B の等温膨張）</span><span>${d(qin)} J</span></div>
+      <div class="bar"><div style="background:var(--net);width:${w / qin * 100}%">${d(w)} J</div><div style="background:var(--cool);width:${qout / qin * 100}%">${d(qout)} J</div></div>
+      <div class="lab" style="margin-top:3px"><span style="color:var(--net)">取り出せた仕事 ${I("W")}′</span><span style="color:var(--cool)">捨てた熱量 ${sub("Q", "out")}（C→D の等温圧縮）</span></div></div>
+    <p class="big">熱効率 ${I("e")} ＝ ${I("W")}′ ÷ ${sub("Q", "in")} ＝ ${d(w)} ÷ ${d(qin)} ≒ ${e.toFixed(2)}（${(e * 100).toFixed(0)}%）</p>
+    <div class="why">
+      <div><b>② カルノーサイクルの熱効率は、熱源の温度だけで決まる</b>${I("e")} ＝ 1 − ${tlow}/${th} ＝ 1 − ${TL}/${S.TH} ＝ ${ec.toFixed(2)}。上で計算した ${e.toFixed(2)} と一致します（温度は絶対温度）。</div>
+      <div><b>③ なぜ温度だけで決まるのか</b>等温の過程の熱は ${sub("Q", "in")} ＝ ${nR}${th} log<sub>e</sub>(${sub("V", "B")}/${sub("V", "A")})、${sub("Q", "out")} ＝ ${nR}${tlow} log<sub>e</sub>(${sub("V", "C")}/${sub("V", "D")})。断熱の式から ${sub("V", "C")}/${sub("V", "D")} ＝ ${sub("V", "B")}/${sub("V", "A")} なので、${sub("Q", "out")}/${sub("Q", "in")} ＝ ${tlow}/${th}。確かめると ${sub("Q", "in")}/${th} ＝ ${(qin / S.TH).toFixed(3)} J/K、${sub("Q", "out")}/${tlow} ＝ ${(qout / TL).toFixed(3)} J/K で等しくなっています。</div>
+      <div><b>④ 熱効率を上げるには</b>高温熱源の温度 ${th} を高く、低温熱源の温度 ${tlow} を低くします。${tlow} ＝ 0 K にはできないので、熱効率は 1 にはなりません。同じ二つの熱源の間ではたらく熱機関の熱効率は、この値を超えられません（熱力学第二法則から導かれます）。</div>
+    </div>`;
+}
+function restoreEff(){ const box = $("eff"); if(box.dataset.k !== "r"){ box.innerHTML = EFF0; box.dataset.k = "r"; } }
+const EFF0 = $("eff").innerHTML;
+
+/* ---------- 設定（サイクルの種類・大きさ） ---------- */
+function buildSet(){
+  const opt = (arr, cur, fmt) => arr.map(v => `<option value="${v}"${+v === +cur ? " selected" : ""}>${fmt(v)}</option>`).join("");
+  const kindSel = `<label for="selK">サイクルの種類 <select id="selK"><option value="rect"${CAR() ? "" : " selected"}>長方形サイクル（定積・定圧）</option><option value="carnot"${CAR() ? " selected" : ""}>カルノーサイクル（等温・断熱）</option></select></label>`;
+  $("setrow").innerHTML = kindSel + (CAR()
+    ? `<label for="selTH">高温熱源の温度 ${sub("T", "H")} <select id="selTH">${opt([450, 600, 900], S.TH, v => v + " K")}</select></label>
+       <label for="selR">等温膨張の体積比 ${sub("V", "B")}/${sub("V", "A")} <select id="selR">${opt([1.5, 2, 3], S.r, v => "×" + v)}</select></label>
+       <span>（低温熱源 ${sub("T", "L")} ＝ 300 K、${sub("p", "A")}${sub("V", "A")} ＝ ${I("n")}${I("R")}${sub("T", "H")}、${sub("V", "A")} ＝ 1.0 L、${I("n")}${I("R")} ＝ 1/3 J/K）</span>`
+    : `<span>サイクルの大きさ：</span>
+       <label for="selP">おもりをのせたときの圧力 ${sub("p", "2")} <select id="selP">${opt([1.5, 2, 3], S.p2, v => (+v).toFixed(1) + "×10⁵ Pa")}</select></label>
+       <label for="selV">上のストッパーの位置 ${sub("V", "2")} <select id="selV">${opt([1.5, 2, 3], S.V2, v => (+v).toFixed(1) + " L")}</select></label>
+       <span>（${sub("p", "1")} ＝ 1.0×10⁵ Pa、${sub("V", "1")} ＝ 1.0 L、${sub("T", "A")} ＝ 300 K）</span>`);
+  $("selK").addEventListener("change", e => { S.kind = e.target.value; buildSet(); setTexts(); go(0); });
+  if(CAR()){ $("selTH").addEventListener("change", e => { S.TH = +e.target.value; go(0); }); $("selR").addEventListener("change", e => { S.r = +e.target.value; go(0); }); }
+  else { $("selP").addEventListener("change", e => { S.p2 = +e.target.value; go(0); }); $("selV").addEventListener("change", e => { S.V2 = +e.target.value; go(0); }); }
+  if(window.ITALIC && ITALIC.scan) try{ ITALIC.scan($("setrow")); }catch(err){}
+  try{ history.replaceState(null, "", CAR() ? `#carnot&TH=${S.TH}&r=${S.r}` : `#p2=${S.p2}&V2=${S.V2}`); }catch(err){}
+}
+function setTexts(){
+  if(CAR()){
+    $("t1").textContent = "カルノーサイクル：等温と断熱を組み合わせた、理想的な熱機関";
+    $("lead1").innerHTML = `高温熱源と低温熱源だけを使い、<b>等温膨張 → 断熱膨張 → 等温圧縮 → 断熱圧縮</b>で気体をもとの状態に戻します。この間に気体が外部にした正味の仕事と、吸収した熱量から、熱効率を考えます。過程ごとに止まるので、確かめてから「次の過程 ▶」を押そう。`;
+  } else {
+    $("t1").textContent = "気体を加熱・冷却して、ピストンを1往復させる";
+    $("lead1").innerHTML = `シリンダーの気体を加熱して膨張させ、冷却して縮ませて、もとの状態に戻します（1サイクル）。この間に気体が外部にした正味の仕事と、吸収した熱量から、熱機関の熱効率を考えます。過程ごとに止まるので、確かめてから「次の過程 ▶」を押そう。`;
+  }
+  $("qs").innerHTML = QS[CAR() ? "c" : "r"].map(([q, a]) => `<li>${q}<details><summary>答えを見る</summary><p class="ans">${a}</p></details></li>`).join("");
+  if(window.ITALIC && ITALIC.scan) try{ ITALIC.scan($("qs")); }catch(err){}
+}
+
 /* ---------- 操作 ---------- */
-function go(k){ S.step = k; S.s = 0; S.playing = DUR[k] > 0; if(reduce){ S.s = 1; S.playing = false; } ui(); draw(); }
-$("nextBtn").addEventListener("click", () => { if(S.playing) return; go(S.step === 6 ? 0 : S.step + 1); if(S.step === 0) go(1); });
+function go(k){ S.step = k; S.s = 0; S.playing = DURX()[k] > 0; if(reduce){ S.s = 1; S.playing = false; } ui(); draw(); }
+$("nextBtn").addEventListener("click", () => { if(S.playing) return; go(S.step === LAST() ? 0 : S.step + 1); if(S.step === 0) go(1); });
 $("prevBtn").addEventListener("click", () => { if(S.step > 0){ S.step--; S.s = 1; S.playing = false; ui(); draw(); } });
 $("againBtn").addEventListener("click", () => go(S.step));
 $("speedSel").addEventListener("change", e => S.speed = +e.target.value);
-$("selP").addEventListener("change", e => { S.p2 = +e.target.value; go(0); });
-$("selV").addEventListener("change", e => { S.V2 = +e.target.value; go(0); });
 
 let last = null, uiT = 0;
 function tick(ts){
   if(last == null) last = ts; const dt = Math.min(0.05, (ts - last) / 1000); last = ts;
-  if(S.playing){ S.s = Math.min(1, S.s + dt * S.speed / DUR[S.step]); if(S.s >= 1){ S.playing = false; ui(); } }
+  if(S.playing){ S.s = Math.min(1, S.s + dt * S.speed / DURX()[S.step]); if(S.s >= 1){ S.playing = false; ui(); } }
   // 粒子：温度に応じた速さで動く（壁で反射）
   const st = stateAt(S.step, S.s), v = 0.35 * Math.sqrt(TofPV(st.p, st.V) / TA) * (reduce ? 0 : 1);
   parts.forEach(p => { p.x += p.dx * v * dt; p.y += p.dy * v * dt * 1.4;
@@ -461,17 +625,33 @@ new MutationObserver(draw).observe(document.documentElement, {attributes:true, a
 if(window.ResizeObserver) new ResizeObserver(resize).observe(cv); else window.addEventListener("resize", resize);
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
 
-$("qs").innerHTML = [
+const QS = { r: [
   ["A→B と C→D で、ピストンが動かないのはなぜか。", "A→B では、気体の圧力がおもりを押し上げるのに必要な圧力 p₂ に達するまで、ピストンは下のストッパーに乗ったままだからです。C→D では、気体の圧力が p₁ に下がるまで、ピストンが上のストッパーに押しつけられているからです。どちらも体積が一定なので、仕事は 0 です。"],
   ["B→C で吸収した熱量は、何に使われたか。", "一部は内部エネルギーの増加（温度上昇）に、残りは気体が外部にした仕事に使われました（Q ＝ ΔU ＋ W′）。だから、同じだけ温度を上げるのに、定積変化より多くの熱が必要です。"],
   ["p-V グラフで、BC の下の面積と DA の下の面積を比べよう。正味の仕事が正になるのはなぜか。", "膨張（B→C）は高い圧力 p₂ で、圧縮（D→A）は低い圧力 p₁ で行うので、した仕事のほうがされた仕事より大きくなります。差は、グラフが囲む長方形の面積です。同じ圧力で膨張と圧縮をくり返すと、囲む面積は 0 で、仕事は取り出せません。"],
   ["T-V グラフで、B→C と D→A はどんな線になっているか。", "原点を通る直線の一部です。圧力が一定のとき、体積は絶対温度に比例します（物理で学ぶシャルルの法則）。直線の傾きが大きいほど、圧力が小さいことを表します。"],
   ["1サイクルの合計で、ΔU はいくらか。Q の合計と W′ の関係は？", "ΔU ＝ 0 です。もとの状態に戻ったからです。熱力学第一法則から、Q の合計（Qin − Qout）は、外部にした正味の仕事 W′ に等しくなります。"],
   ["熱効率の分母を「Qin − Qout」にしてはいけないのはなぜか。", "1サイクルでは Qin − Qout ＝ W′ がいつも成り立つので、熱効率がどんな熱機関でも 1 になってしまいます。熱効率は「受け取った熱量（燃料などで加えた熱量）のうち、どれだけを仕事にできたか」を表すので、分母は受け取った熱量 Qin だけです。"],
-  ["p₂ や V₂ を変えて、熱効率を比べよう。どうすると熱効率が大きくなるか。", "このサイクルでは、p₂ を大きくしても（高い圧力で膨張させる）、V₂ を大きくしても（大きく膨張させる）熱効率は大きくなります。ただし、吸収する熱量も増えるので熱効率の伸びには限りがあり、どの場合も e ＜ 1 です。たとえば p₂ ＝ 2.0×10⁵ Pa、V₂ ＝ 2.0 L で約 15%、p₂ ＝ 3.0×10⁵ Pa にすると約 19% です。"]
-].map(([q, a]) => `<li>${q}<details><summary>答えを見る</summary><p class="ans">${a}</p></details></li>`).join("");
+  ["p₂ や V₂ を変えて、熱効率を比べよう。どうすると熱効率が大きくなるか。", "このサイクルでは、p₂ を大きくしても（高い圧力で膨張させる）、V₂ を大きくしても（大きく膨張させる）熱効率は大きくなります。ただし、吸収する熱量も増えるので熱効率の伸びには限りがあり、どの場合も e ＜ 1 です。たとえば p₂ ＝ 2.0×10⁵ Pa、V₂ ＝ 2.0 L で約 15%、p₂ ＝ 3.0×10⁵ Pa にすると約 19% です。"],
+  ["同じ最高温度・最低温度で、カルノーサイクルの熱効率（1 − 最低温度/最高温度）を計算し、このサイクルと比べよう。", "例：p₂ ＝ V₂ ＝ 2.0 のとき、最高温度 1200 K、最低温度 300 K なので 1 − 300/1200 ＝ 0.75。このサイクルは 0.15 で、はるかに小さい。上の「サイクルの種類」でカルノーサイクルに切りかえて確かめよう。"]
+], c: [
+  ["A→B（等温膨張）で吸収した熱は、何に使われたか。内部エネルギーはどうなるか。", "すべて気体が外にする仕事になる。温度が一定なので内部エネルギーは変わらない（ΔU ＝ 0、Q ＝ W′）。"],
+  ["B→C は熱の出入りがない（Q ＝ 0）のに、温度が下がる。なぜか。", "気体が外に仕事をした分を、内部エネルギーでまかなうから（ΔU ＝ −W′）。断熱膨張なので温度が下がる。"],
+  ["V_B/V_A と V_C/V_D を比べよう。この関係から何がわかるか。", "等しい。このため Q_out/Q_in ＝ T_L/T_H となり、熱効率が温度だけで決まる。"],
+  ["高温熱源を 900 K にすると、熱効率と、吸収・放出する熱量はどう変わるか。", "熱効率は 1 − 300/900 ＝ 0.67 に上がる。吸収する熱 Q_in も、捨てる熱 Q_out も、体積比が同じなら温度に比例して大きくなる。"],
+  ["熱効率を 1 にするには、熱源の温度をどうすればよいか。それはできるか。", "低温熱源を 0 K にするか、高温熱源を無限に高くする必要があるが、どちらもできない。だから熱効率は 1 にならない。"],
+  ["A→B と C→D で、p-V グラフの面積と熱の関係を比べよう。", "どちらも等温変化なので、面積（仕事）の大きさがそのまま熱の大きさになる（Q ＝ W′ または Q ＝ −W）。"]
+] };
 
-ui(); resize(); requestAnimationFrame(tick);
+function readHash(){
+  S.kind = "rect";
+  (location.hash || "").replace(/^#/, "").split("&").forEach(kv => { const [a, b] = kv.split("="); if(a === "carnot") S.kind = "carnot"; if(b == null) return;
+  if(a === "p2" && ["1.5","2","3"].includes(b)) S.p2 = +b; if(a === "V2" && ["1.5","2","3"].includes(b)) S.V2 = +b;
+  if(a === "TH" && ["450","600","900"].includes(b)) S.TH = +b; if(a === "r" && ["1.5","2","3"].includes(b)) S.r = +b; });
+}
+readHash();
+window.addEventListener("hashchange", () => { readHash(); buildSet(); setTexts(); go(0); });
+buildSet(); setTexts(); ui(); resize(); requestAnimationFrame(tick);
 })();
 </script>
 </body>
