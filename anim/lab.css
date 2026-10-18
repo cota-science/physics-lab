@@ -26,6 +26,9 @@ html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:14px;line-height:1.6;padding:0 16px 32px;-webkit-text-size-adjust:100%}
 .wrap{max-width:1280px;margin:0 auto}
 .s{font-family:var(--f-sym);font-style:italic}
+.va{position:relative;display:inline-block;font-family:var(--f-sym);font-style:italic;font-weight:700;padding-top:.45em;line-height:1}
+.va::before{content:"";position:absolute;left:0;right:3px;top:.12em;height:0;border-top:1.3px solid currentColor}
+.va::after{content:"";position:absolute;right:0;top:.12em;margin-top:-2.2px;border-left:4px solid currentColor;border-top:2.5px solid transparent;border-bottom:2.5px solid transparent}
 .vb{font-family:var(--f-sym);font-style:italic;font-weight:700}
 sub{font-size:.72em;line-height:0}
 .num{font-family:var(--f-num);font-variant-numeric:tabular-nums}

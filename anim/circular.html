@@ -14,7 +14,8 @@
 <script>
 (function(){
 "use strict";
-const {f, S, V, css, prep, arrow, label, symFont, uiFont, numFont, fit, disc, table, graph} = LAB;
+const {f, S, css, prep, arrow, label, symFont, uiFont, numFont, fit, disc, table, graph} = LAB;
+const V = s => `<span class="va">${s}</span>`;   // 文字の上に → をつけたベクトル記号
 const G = 9.8, PI2 = Math.PI*2;
 
 /* ---------- 等速円運動 ---------- */
