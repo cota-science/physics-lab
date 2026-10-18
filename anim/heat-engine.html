@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
 <style>
-/* Layout: step-by-step worksheet. Wide stage: cylinder (with stoppers, weight, heater) | p-V graph | V-T graph (phone: cylinder + p-V on row 1, readout + T-V on row 2). Under it: step chips, step card with Next/Back, energy table filling row by row, then efficiency panel (unlocked after one cycle), questions. */
+/* Layout: step-by-step worksheet. Wide stage: cylinder (with stoppers, weight, heater) | p-V graph | V-T graph (phone: cylinder + p-V on row 1, readout + V-T on row 2). Under it: step chips, step card with Next/Back, energy table filling row by row, then efficiency panel (unlocked after one cycle), questions. */
 :root{
   --paper:#FAFBF7; --grid:#E4EBF1; --ink:#1C2430; --muted:#5B6675;
   --blue:#2447B3; --blue-soft:#E7EDFB; --red:#CF2A2A; --red-soft:#FCECEA;
@@ -121,7 +121,7 @@ tr.sum td{font-weight:700;border-top:2px solid var(--ink)}
   <section class="sheet" aria-labelledby="t1">
     <h2 id="t1">気体を加熱・冷却して、ピストンを1往復させる</h2>
     <p class="lead" id="lead1">シリンダーの気体を加熱して膨張させ、冷却して縮ませて、もとの状態に戻します（1サイクル）。この間に気体が外部にした正味の仕事と、吸収した熱量から、熱機関の熱効率を考えます。過程ごとに止まるので、確かめてから「次の過程 ▶」を押そう。</p>
-    <div class="stage"><canvas id="cv" role="img" aria-label="左にストッパーとおもりのついたシリンダー、中央に圧力と体積のグラフ、右に温度と体積のグラフ。サイクルの進み具合に合わせて、グラフの上の点が動く。"></canvas></div>
+    <div class="stage"><canvas id="cv" role="img" aria-label="左にストッパーとおもりのついたシリンダー、中央に圧力と体積のグラフ、右に体積と温度のグラフ（V-T グラフ）。サイクルの進み具合に合わせて、グラフの上の点が動く。"></canvas></div>
     <div class="setrow" id="setrow"></div>
 
     <ol class="chips" id="chips"></ol>
@@ -412,9 +412,9 @@ function stepTextR(){
   return [
     { h: "初期状態 A", t: `ピストンは<b>下のストッパー</b>に乗っています。ピストンの上には<b>おもり</b>がのっていて、ピストンを押し上げるには、気体の圧力が ${sub("p", "2")} ＝ ${p2}×10⁵ Pa 以上になる必要があります。いまの気体は 圧力 ${sub("p", "1")} ＝ 1.0×10⁵ Pa、体積 ${sub("V", "1")} ＝ 1.0 L、温度 300 K です。`,
       eq: `状態 A：${I("p")} ＝ 1.0×10⁵ Pa、${I("V")} ＝ 1.0 L、${I("T")} ＝ 300 K、${I("U")} ＝ ${r(U(P1, V1))} J` },
-    { h: "A→B 加熱・定積変化", t: `下から加熱します。気体の圧力が ${sub("p", "2")} になるまでは、おもりのせいでピストンは動きません（体積一定）。体積が変わらないので仕事は 0。吸収した熱はすべて内部エネルギーの増加になり、温度が上がります。p-V グラフでは真上へ、T-V グラフでも真上へ進みます。`,
+    { h: "A→B 加熱・定積変化", t: `下から加熱します。気体の圧力が ${sub("p", "2")} になるまでは、おもりのせいでピストンは動きません（体積一定）。体積が変わらないので仕事は 0。吸収した熱はすべて内部エネルギーの増加になり、温度が上がります。p-V グラフでは真上へ、V-T グラフでは右へ（水平に）進みます。`,
       eq: `${I("W")} ＝ 0 より Δ${I("U")} ＝ ${I("Q")} ＝ ${sg(e1.Q)} J` },
-    { h: "B→C 加熱・定圧変化", t: `圧力が ${sub("p", "2")} に達すると、ピストンが<b>等速で上昇</b>し始めます。気体の圧力は ${sub("p", "2")} のまま（定圧）です。気体はピストンを押して外部に仕事をします。仕事は 力 × 距離 ＝ (${I("p")}${I("S")}) × Δ${I("x")} ＝ ${I("p")}Δ${I("V")} で、p-V グラフの BC の下の面積です。T-V グラフでは原点を通る直線の上を進みます（圧力一定なら ${I("V")} ∝ ${I("T")}）。`,
+    { h: "B→C 加熱・定圧変化", t: `圧力が ${sub("p", "2")} に達すると、ピストンが<b>等速で上昇</b>し始めます。気体の圧力は ${sub("p", "2")} のまま（定圧）です。気体はピストンを押して外部に仕事をします。仕事は 力 × 距離 ＝ (${I("p")}${I("S")}) × Δ${I("x")} ＝ ${I("p")}Δ${I("V")} で、p-V グラフの BC の下の面積です。V-T グラフでは原点を通る直線の上を進みます（圧力一定なら ${I("V")} ∝ ${I("T")}）。`,
       eq: `した仕事 ${I("W")}′ ＝ ${sub("p", "2")}(${sub("V", "2")} − ${sub("V", "1")}) ＝ ${r(-e2.W)} J、Δ${I("U")} ＝ ${sg(e2.dU)} J、${I("Q")} ＝ Δ${I("U")} ＋ ${I("W")}′ ＝ ${sg(e2.Q)} J` },
     { h: "C でピストンが静止（加熱をやめ、おもりを外す）", t: `ピストンが<b>上のストッパー</b>に達して止まりました（体積 ${sub("V", "2")} ＝ ${V2} L、温度は最高）。ここで加熱をやめ、<b>おもりを外します</b>。気体の圧力は ${sub("p", "2")} のままなので、ピストンは上のストッパーに押しつけられています。`,
       eq: `状態 C：${I("p")} ＝ ${p2}×10⁵ Pa、${I("V")} ＝ ${V2} L、${I("T")} ＝ ${r(TofPV(S.p2, S.V2))} K、${I("U")} ＝ ${r(U(S.p2, S.V2))} J` },
