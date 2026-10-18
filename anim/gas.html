@@ -290,10 +290,10 @@ function pvPath(P){
   const n = p1*V1*100/(Rg*300);   // T₁ ＝ 300 K として n を決める
   return {V1, p1, V2, p2, at, Wp, dU, Qh, n, T1:300, T2:300*p2*V2/(p1*V1)};
 }
-function pvAxes(c, box, vmax, pmax, ink2, ink3){
+function pvAxes(c, box, vmax, pmax, ink2, ink3, ylab){
   const X = Vv => box.x + Vv/vmax*box.w, Y = pp => box.y + box.h - pp/pmax*box.h;
   c.strokeStyle = ink2; c.lineWidth = 1.4; c.beginPath(); c.moveTo(X(0), Y(pmax)); c.lineTo(X(0), Y(0)); c.lineTo(X(vmax), Y(0)); c.stroke();
-  label(c, "p〔×10⁵ Pa〕", X(0) + 4, Y(pmax) + 6, ink3, "left", uiFont(11)); label(c, "V〔×10⁻³ m³〕", X(vmax), Y(0) + 14, ink3, "right", uiFont(11));
+  label(c, ylab || "p〔×10⁵ Pa〕", X(0) + 4, Y(pmax) + 6, ink3, "left", uiFont(11)); label(c, "V〔×10⁻³ m³〕", X(vmax), Y(0) + 27, ink3, "right", uiFont(11));
   const sv = LAB.niceStep(vmax, 5), sp = LAB.niceStep(pmax, 4);
   c.font = numFont(10); c.fillStyle = ink3; c.textAlign = "center";
   for(let v = sv; v < vmax; v += sv) c.fillText(f(v, 0), X(v), Y(0) + 12);
@@ -313,7 +313,7 @@ const pv = {
   selects:[["proc","変化の種類",[["v","定積変化"],["p","定圧変化"],["T","等温変化"],["a","断熱変化"]],"p"]],
   params:[["p1","はじめの圧力 "+S("p")+"₁",0.5,3,0.05,"×10⁵ Pa",2,1],["V1","はじめの体積 "+S("V")+"₁（T₁ ＝ 300 K）",5,50,0.1,"×10⁻³ m³",1,24.9],
           ["V2","終わりの体積 "+S("V")+"₂（定積以外）",2,80,0.01,"×10⁻³ m³",2,33.2],["p2","終わりの圧力 "+S("p")+"₂（定積のとき）",0.2,6,0.05,"×10⁵ Pa",2,2]],
-  timed:true, graphs:0, aspect:"4/3",
+  timed:true, graphs:1, wide:[0], aspect:"4/3",
   legend:`<span><i style="background:var(--pos)"></i>変化の道すじ</span><span><i style="background:var(--hl2)"></i>面積 ＝ 気体がした仕事</span><span><i style="background:var(--neg)"></i>熱 ${S("Q")}</span><span><i style="background:var(--acc)"></i>仕事</span>`,
   reset(){}, duration(){ return 4; }, step(){},
   draw(ctx){
@@ -344,6 +344,17 @@ const pv = {
     if(Math.abs(D.Qh) > 1 && s < 1){ const qx = cyl.x + Math.min(40, (px - cyl.x)/2); arrow(c, qx, cyl.y + cyl.h + (qdir > 0 ? 34 : 4), qx, cyl.y + cyl.h + (qdir > 0 ? 4 : 34), neg, 3); label(c, qdir > 0 ? "熱を吸収" : "熱を放出", qx + 8, cyl.y + cyl.h + 22, neg, "left", uiFont(11, true)); }
     if(P.proc === "a") label(c, "断熱（熱の出入りなし）", cyl.x + 4, cyl.y + cyl.h + 20, neg, "left", uiFont(11, true));
     if(Math.abs(D.Wp) > 1 && s < 1){ arrow(c, px + 34, cyl.y + cyl.h/2, px + 34 + wdir*28, cyl.y + cyl.h/2, acc, 3); label(c, wdir > 0 ? "外に仕事" : "仕事をされる", px + 34, cyl.y + cyl.h/2 - 14, acc, "left", uiFont(11, true)); }
+    // T-V 図
+    { const {c:g, w:gw, h:gh} = prep(ctx.graphs[0]), Tof = q => 300*q[0]*q[1]/(D.V1*D.p1);
+      let Tm = 300; for(let i = 0; i <= 60; i++) Tm = Math.max(Tm, Tof(D.at(i/60)));
+      const Tmax = Tm*1.2, bx = {x:48, y:30, w:gw - 70, h:gh - 66}, tx = pvAxes(g, bx, vmax, Tmax, ink2, ink3, "T〔K〕");
+      g.font = uiFont(12); g.fillStyle = ink2; g.textBaseline = "middle"; g.textAlign = "left"; g.fillText("T-V 図", 8, 10);
+      if(P.proc === "p" && 300*vmax/D.V1 < Tmax){ g.strokeStyle = ink3; g.globalAlpha = 0.5; g.setLineDash([4, 4]); g.lineWidth = 1.2; g.beginPath(); g.moveTo(tx.X(0), tx.Y(0)); g.lineTo(tx.X(vmax), tx.Y(300*vmax/D.V1)); g.stroke(); g.setLineDash([]); g.globalAlpha = 1; }
+      g.strokeStyle = pos; g.globalAlpha = 0.3; g.lineWidth = 2; g.beginPath(); for(let i = 0; i <= 80; i++){ const q = D.at(i/80); i ? g.lineTo(tx.X(q[0]), tx.Y(Tof(q))) : g.moveTo(tx.X(q[0]), tx.Y(Tof(q))); } g.stroke(); g.globalAlpha = 1;
+      g.lineWidth = 3; g.beginPath(); for(let i = 0; i <= 80; i++){ const q = D.at(s*i/80); i ? g.lineTo(tx.X(q[0]), tx.Y(Tof(q))) : g.moveTo(tx.X(q[0]), tx.Y(Tof(q))); } g.stroke();
+      disc(g, tx.X(cur[0]), tx.Y(Tof(cur)), 6, pos);
+      label(g, "1", tx.X(D.V1) - 8, tx.Y(300) - 8, ink2, "right", uiFont(12, true)); label(g, "2", tx.X(D.V2) + 8, tx.Y(Tof([D.V2, D.p2])) - 8, ink2, "left", uiFont(12, true));
+      label(g, {v:"定積：V 一定で、T は p に比例", p:"定圧：原点を通る直線（V ∝ T）", T:"等温：T 一定", a:"断熱：T V^(2/3) ＝ 一定"}[P.proc], gw - 8, 10, ink3, "right", numFont(10)); }
     ctx.banner(`${PROC[P.proc]}：Q ＝ ΔU ＋ W′ → ${f(D.Qh,0)} ＝ ${f(D.dU,0)} ＋ ${f(D.Wp,0)}〔J〕`, "--ui");
     ctx.ro(table([[`物質量 ${S("n")}（${S("p")}₁${S("V")}₁ ＝ ${S("n")}${S("R")} × 300）`, `${f(D.n,3)} mol`], [`状態1 → 2：${S("p")}〔×10⁵ Pa〕`, `${f(D.p1,3)} → ${f(D.p2,3)}`], [`${S("V")}〔×10⁻³ m³〕`, `${f(D.V1,2)} → ${f(D.V2,2)}`], [`${S("T")}〔K〕`, `300 → ${f(D.T2,1)}`],
       [`気体がした仕事 ${S("W")}′（面積）`, `${f(D.Wp,1)} J`], [`内部エネルギーの増加 Δ${S("U")} ＝ (3/2)Δ(${S("p")}${S("V")})`, `${f(D.dU,1)} J`], [`吸収した熱量 ${S("Q")}`, `${f(D.Qh,1)} J`]]));
@@ -353,7 +364,9 @@ const pv = {
   asks:[
     ["同じ体積だけ膨張させるとき、等温と断熱で終わりの圧力・温度を比べよう。", "断熱のほうが圧力の下がり方が急で、温度が下がる（外への仕事を内部エネルギーでまかなうから）。"],
     ["定圧変化で、Q・ΔU・W′ の比はいくらか。", "5 : 3 : 2。"],
-    ["圧縮（V₂ ＜ V₁）にすると、面積の色と W′ の符号はどうなるか。", "W′ が負（外から仕事をされる）。"]
+    ["圧縮（V₂ ＜ V₁）にすると、面積の色と W′ の符号はどうなるか。", "W′ が負（外から仕事をされる）。"],
+    ["T-V 図で、定圧変化・等温変化・定積変化はそれぞれどんな線か。", "定圧は原点を通る直線（V ∝ T）、等温は水平な線、定積は縦の線。"],
+    ["膨張させたとき、等温と断熱で T-V 図の線はどう違うか。", "等温は水平（T 一定）、断熱は右下がりの曲線（膨張すると温度が下がる）。"]
   ]
 };
 
