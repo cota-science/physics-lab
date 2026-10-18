@@ -25,7 +25,7 @@ window.UNIT_LIST = [
     { id: "momentum",   title: "3 運動量と力積",            file: "units/momentum.js" },
     { id: "anim-circular", title: "▶ 円運動ラボ",          href: "anim/circular.html#uniform", note: "等速円運動の位置・速度・加速度ベクトル（速度を1点から並べると Δv は中心向き）、円すい振り子を地面から・回転する人から見る（遠心力）、鉛直面内の円運動と糸がたるむ位置、電車の中のおもり（加速・等速・減速、地面と電車の2つの立場、見かけの重力、糸を切る、単振り子とばね振り子の周期）" },
     { id: "circular",   title: "4 円運動と慣性力",          file: "units/circular.js" },
-    { id: "anim-shm",   title: "▶ 単振動ラボ",            href: "anim/shm.html#circle", note: "等速円運動の影が単振動（x・v・a のグラフが連動）、ばね振り子（水平・鉛直）とエネルギー、単振り子（振れ角が大きいと周期が長くなる）" },
+    { id: "anim-shm",   title: "▶ 単振動ラボ",            href: "anim/shm.html#circle", note: "等速円運動の影が単振動（x・v・a のグラフが連動）、ばね振り子（水平・鉛直）とエネルギー、単振り子（振れ角が大きいと周期が長くなる）、浮力と重力の単振動（水に浮かぶ物体）" },
     { id: "shm",        title: "5 単振動",                  file: "units/shm.js" },
     { id: "anim-gravitation", title: "▶ 万有引力ラボ",     href: "anim/gravitation.html#orbit", note: "人工衛星の軌道（円・楕円・放物線・双曲線、等しい時間の扇形で面積速度一定、エネルギーのグラフ）、ケプラーの第3法則、打ち上げと第2宇宙速度（U(r) ＝ −GM/r の図）" },
     { id: "gravitation",title: "6 万有引力",                file: "units/gravitation.js" },

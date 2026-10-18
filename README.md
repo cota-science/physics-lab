@@ -33,7 +33,7 @@ anim/             シミュレーター
   rigid.html      剛体ラボ（#moment 力のモーメント／#balance 重心とてこ／#ladder はしごのつり合い／#tip 箱の転倒。sc ＝ push・slope）
   momentum.html   運動量ラボ（#collide 一直線上の衝突／#oblique 平面上の衝突（力積と運動量のベクトル図）／#merge 平面での合体／#bounce 床ではね返るボール）
   circular.html   円運動ラボ（#uniform 等速円運動のベクトル／#conical 円すい振り子と遠心力／#vertical 鉛直面内の円運動／#train 電車の中のおもり。motion ＝ acc・const・dec、obj ＝ pend・rest・cut・spring、view ＝ train・ground）
-  shm.html        単振動ラボ（#circle 円運動の影／#spring ばね振り子とエネルギー／#pendulum 大きな振れ角の単振り子）
+  shm.html        単振動ラボ（#circle 円運動の影／#spring ばね振り子とエネルギー／#pendulum 大きな振れ角の単振り子／#buoy 浮力と重力の単振動（水に浮かぶ物体））
   gravitation.html 万有引力ラボ（#orbit 人工衛星の軌道と面積速度／#kepler ケプラーの第3法則／#escape 打ち上げと第2宇宙速度）
   gas.html        気体分子ラボ（#kinetic 分子の運動と圧力／#pv p-V 図と状態変化／#cycle 熱機関のサイクル）
 ```
@@ -68,6 +68,7 @@ URL の `#` 以降で、モードと値を指定して開けます。問題文�
 - `anim/momentum.html#collide&m1=2&m2=1&v1=3&v2=0&e=0.5`
 - `anim/circular.html#vertical&r=0.4&v0=4.43&m=0.1`
 - `anim/shm.html#spring&k=49&m=0.5&A=0.05&dir=v`
+- `anim/shm.html#buoy&rb=600&L=0.2&Sa=0.01&A=0.05&rho=1000`
 - `anim/gravitation.html#orbit&r0=2&v0=5.6`
 - `anim/gas.html#pv&proc=p&p1=1&V1=24.9&V2=33.2`（proc ＝ v 定積・p 定圧・T 等温・a 断熱）
 

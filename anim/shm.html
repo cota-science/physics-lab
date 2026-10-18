@@ -17,6 +17,7 @@
 "use strict";
 const {f, S, V, css, prep, arrow, label, symFont, uiFont, numFont, fit, disc, table, graph} = LAB;
 const G = 9.8, PI2 = Math.PI*2;
+const frac = (a, b) => `<span style="display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:.92em;line-height:1.15;margin:0 2px"><span style="border-bottom:1px solid currentColor;padding:0 2px">${a}</span><span>${b}</span></span>`;
 
 function spring(c, x1, y1, x2, y2, coils, amp, color){
   const L = Math.hypot(x2-x1, y2-y1), ux = (x2-x1)/L, uy = (y2-y1)/L, nx = -uy, ny = ux, lead = Math.min(10, L*0.1);
@@ -169,7 +170,80 @@ const pendulum = {
   ]
 };
 
-LAB.app({title:"単振動ラボ", modes:{circle, spring:springMode, pendulum}});
+/* ---------- 浮力と重力の単振動 ---------- */
+const buoy = {
+  label:"浮力と重力（水に浮かぶ物体）",
+  params:[["rb","物体の密度 "+S("ρ")+"′",200,700,10,"kg/m³",0,600],["L","物体の高さ "+S("L"),0.10,0.40,0.01,"m",2,0.20],["Sa","底面積 "+S("S"),0.005,0.030,0.001,"m²",3,0.010],["A","押し下げる深さ "+S("A"),0.01,0.15,0.005,"m",3,0.05]],
+  selects:[["rho","液体の密度 "+S("ρ"),[[800,"油 800 kg/m³"],[1000,"水 1000 kg/m³"],[1200,"食塩水 1200 kg/m³"]],1000]],
+  toggles:[["force","力の矢印（重力・浮力・合力）",true]],
+  timed:true, graphs:3, dt:1/2000,
+  legend:`<span><i style="background:var(--acc)"></i>重力 ${S("m")}${S("g")}</span><span><i style="background:var(--vel)"></i>浮力</span><span><i style="background:var(--hl2)"></i>合力（復元力）</span><span><i style="background:var(--ink3)"></i>単振動の式</span>`,
+  reset(P, St){ St.x = P.A; St.v = 0; St.tr = []; St.last = -1; St.cross = []; },
+  duration(P){ return 3*PI2/Math.sqrt(P.rho*G/(P.rb*P.L)); },
+  step(P, St, dt, t){
+    const d0 = P.rb*P.L/P.rho, acc = x => { const d = d0 + x; return d < 0 ? G : d > P.L ? G*(1 - P.rho/P.rb) : G*(1 - d/d0); };
+    const x0 = St.x, a1 = acc(x0), x2 = x0 + 0.5*dt*St.v, v2 = St.v + 0.5*dt*a1, a2 = acc(x2), x3 = x0 + 0.5*dt*v2, v3 = St.v + 0.5*dt*a2, a3 = acc(x3), x4 = x0 + dt*v3, v4 = St.v + dt*a3, a4 = acc(x4);
+    St.x += dt/6*(St.v + 2*v2 + 2*v3 + v4); St.v += dt/6*(a1 + 2*a2 + 2*a3 + a4);
+    if(x0 > 0 && St.x <= 0) St.cross.push(t + dt);
+    if(t + dt - St.last >= 0.01){
+      const d = d0 + St.x, B = P.rho*P.Sa*G*Math.min(Math.max(d, 0), P.L), W = P.rb*P.Sa*P.L*G;
+      St.tr.push({t:t + dt, x:St.x, v:St.v, B, W, F:W - B}); St.last = t + dt;
+    }
+  },
+  draw(ctx){
+    const {P, S:St, t, T} = ctx; const {c, w, h} = prep(ctx.stage);
+    const ink2 = css("--ink2"), ink3 = css("--ink3"), pos = css("--pos"), vel = css("--vel"), hl2 = css("--hl2"), acc = css("--acc");
+    const m = P.rb*P.Sa*P.L, d0 = P.rb*P.L/P.rho, k = P.rho*P.Sa*G, om = Math.sqrt(k/m), T0 = PI2/om, a = Math.sqrt(P.Sa);
+    const d = d0 + St.x, dd = Math.min(Math.max(d, 0), P.L), B = P.rho*P.Sa*G*dd, W = m*G, F = W - B;
+    const tf = fit(w, h, {x0:-0.5, x1:0.5, y0:-(P.L + 0.16), y1:P.L + 0.2}, 8);
+    // 水そう・水面
+    c.fillStyle = "rgba(60,140,220,0.22)"; c.fillRect(tf.X(-0.38), tf.Y(0), 0.76*tf.s, (P.L + 0.12)*tf.s);
+    c.strokeStyle = ink2; c.lineWidth = 2; c.beginPath(); c.moveTo(tf.X(-0.38), tf.Y(P.L + 0.1)); c.lineTo(tf.X(-0.38), tf.Y(-(P.L + 0.12))); c.lineTo(tf.X(0.38), tf.Y(-(P.L + 0.12))); c.lineTo(tf.X(0.38), tf.Y(P.L + 0.1)); c.stroke();
+    c.strokeStyle = "rgba(40,110,200,0.9)"; c.lineWidth = 1.6; c.beginPath(); c.moveTo(tf.X(-0.38), tf.Y(0)); c.lineTo(tf.X(0.38), tf.Y(0)); c.stroke();
+    label(c, "水面（液面）", tf.X(-0.36), tf.Y(0) - 8, "rgba(40,110,200,1)", "left", uiFont(11));
+    // 物体：底が深さ d の位置
+    const top = P.L - d, bot = -d;
+    c.fillStyle = css("--ground"); c.globalAlpha = 0.9; c.fillRect(tf.X(-a/2), tf.Y(top), a*tf.s, P.L*tf.s); c.globalAlpha = 1;
+    c.strokeStyle = ink2; c.lineWidth = 1.6; c.strokeRect(tf.X(-a/2), tf.Y(top), a*tf.s, P.L*tf.s);
+    // 基準の目盛り（物体の底の位置）
+    const rx = 0.2, rx2 = 0.36;
+    [[-d0, "つり合い"], [-(d0 + P.A), "＋A（最も深い）"], [-(d0 - P.A), "−A（最も浅い）"]].forEach(([yy, lab], i) => {
+      c.strokeStyle = ink3; c.lineWidth = 1; c.setLineDash([3,3]); c.beginPath(); c.moveTo(tf.X(-a/2 - 0.04), tf.Y(yy)); c.lineTo(tf.X(rx2), tf.Y(yy)); c.stroke(); c.setLineDash([]);
+      label(c, lab, tf.X(rx2) - 2, tf.Y(yy) - 6, ink3, "right", uiFont(10));
+    });
+    label(c, "物体の底の位置", tf.X(rx2) - 2, tf.Y(-(d0 + P.A)) + 14, ink3, "right", uiFont(10));
+    // 力の矢印（重力 mg を基準の長さに）
+    if(T.force){
+      const kf = 0.16*tf.s/W, cx = tf.X(0), cy = tf.Y(top - P.L/2);
+      arrow(c, cx - 14, cy, cx - 14, cy + W*kf, acc, 2.8);
+      if(B > 1e-9) arrow(c, cx + 14, tf.Y(bot + 0.0), cx + 14, tf.Y(bot) - B*kf, vel, 2.8);
+      if(Math.abs(F) > 1e-6) arrow(c, cx + 34, cy, cx + 34, cy + F*kf, hl2, 2.8);
+    }
+    const lim1 = P.A > d0 + 1e-9, lim2 = P.A > P.L - d0 + 1e-9;
+    ctx.banner(lim1 ? `押し下げる深さ A ＞ つり合いの沈み ${f(d0,3)} m：振動の途中で物体が水面から飛び出し、空中では浮力が 0 なので単振動でなくなる` : lim2 ? `A ＞ ${f(P.L - d0,3)} m（完全に沈む深さ）：全部沈むと浮力が一定になり、単振動でなくなる` : `つり合いの位置（水に ${f(d0,3)} m 沈む）が振動の中心。合力は −${f(k,1)}${"x"}（ばねと同じ形）`, lim1 || lim2 ? "--hl2" : "--ui");
+    const tr = St.tr;
+    graph(ctx.graphs[0], {title:"位置 x（下向き正）", unit:"m", tmax:ctx.dur, t, series:[{pts:tr.map(o => [o.t, o.x]), color:"--pos", name:"実際"}, {fn:s => P.A*Math.cos(om*s), color:"--ink3", name:"単振動の式"}]});
+    graph(ctx.graphs[1], {title:"速さ v（下向き正）", unit:"m/s", tmax:ctx.dur, t, series:[{pts:tr.map(o => [o.t, o.v]), color:"--vel"}]});
+    graph(ctx.graphs[2], {title:"力（下向き正）", unit:"N", tmax:ctx.dur, t, series:[{pts:tr.map(o => [o.t, o.W]), color:"--acc", name:"重力"}, {pts:tr.map(o => [o.t, -o.B]), color:"--vel", name:"浮力"}, {pts:tr.map(o => [o.t, o.F]), color:"--hl2", name:"合力"}]});
+    const meas = St.cross.length >= 2 ? St.cross[St.cross.length - 1] - St.cross[St.cross.length - 2] : null;
+    ctx.ro(table([[`物体の質量 ${S("m")} ＝ ${S("ρ")}′${S("S")}${S("L")}`, `${f(m,3)} kg`], [`つり合いの沈み ${S("d")}<sub>0</sub> ＝ ${S("ρ")}′${S("L")}/${S("ρ")}`, `${f(d0,3)} m（体積の ${f(d0/P.L*100,0)}%）`], [`復元力の定数 ${S("k")} ＝ ${S("ρ")}${S("S")}${S("g")}`, `${f(k,2)} N/m`], [`角振動数 ${S("ω")} ＝ √(${S("k")}/${S("m")})`, `${f(om,3)} rad/s`], [`周期 ${S("T")} ＝ 2π√(${S("m")}/${S("k")}) ＝ 2π√(${S("d")}<sub>0</sub>/${S("g")})`, `${f(T0,3)} s`], [`シミュレーションで測った周期`, meas ? `${f(meas,3)} s` : "測定中…"], [`水面から飛び出さない・全部沈まない ${S("A")} の範囲`, `${f(Math.min(d0, P.L - d0),3)} m 以下`]]));
+    const mS = f(m, 3), SS = f(P.Sa, 3), rS = f(P.rho, 0), gS = "9.8";
+    ctx.eqs(`<p class="eq"><b>つり合い</b>：重力 ＝ 浮力 → ${S("m")}${S("g")} ＝ ${S("ρ")}${S("S")}${S("d")}<sub>0</sub>${S("g")}　→　${S("d")}<sub>0</sub> ＝ ${S("m")}/(${S("ρ")}${S("S")}) ＝ ${mS}/(${rS} × ${SS}) ＝ ${f(d0,3)} m</p>
+<p class="eq"><b>つり合いから下へ ${S("x")} ずらすと</b>（水に沈む深さ ${S("d")}<sub>0</sub> ＋ ${S("x")}）：浮力 ＝ ${S("ρ")}${S("S")}(${S("d")}<sub>0</sub> ＋ ${S("x")})${S("g")}。合力（下向き正）${S("F")} ＝ ${S("m")}${S("g")} − ${S("ρ")}${S("S")}(${S("d")}<sub>0</sub> ＋ ${S("x")})${S("g")} ＝ <b>−${S("ρ")}${S("S")}${S("g")}${S("x")}</b> ＝ −${f(k,2)}${S("x")}</p>
+<p class="eq">${S("F")} ＝ −${S("k")}${S("x")}（${S("k")} ＝ ${S("ρ")}${S("S")}${S("g")}）の形なので<b>単振動</b>。${S("T")} ＝ 2π√(${S("m")}/${S("k")}) ＝ 2π√(${S("m")}/(${S("ρ")}${S("S")}${S("g")})) ＝ 2π√(${mS}/(${rS} × ${SS} × ${gS})) ＝ ${f(T0,3)} s。${S("m")} ＝ ${S("ρ")}′${S("S")}${S("L")} を使うと ${S("S")} は消えて ${S("T")} ＝ 2π√(${S("ρ")}′${S("L")}/(${S("ρ")}${S("g")})) ＝ 2π√(${S("d")}<sub>0</sub>/${S("g")})</p>
+<p class="eq"><span class="tag c">微積</span>運動方程式 ${S("m")}${frac("d²"+S("x"), "d"+S("t")+"²")} ＝ −${S("ρ")}${S("S")}${S("g")}${S("x")} → ${S("x")} ＝ ${S("A")} cos ${S("ω")}${S("t")}、${S("ω")} ＝ √(${S("ρ")}${S("S")}${S("g")}/${S("m")})。<span class="tag n">微積なし</span>つり合いの位置からの変位に比例する復元力 −${S("k")}${S("x")} なので、ばね振り子の ${S("k")} を ${S("ρ")}${S("S")}${S("g")} に置きかえれば周期が求まる。</p>
+<p class="eq" style="color:var(--ink2)">成り立つ範囲：浮力は沈んだ体積に比例するので、水面から飛び出す（${S("A")} ＞ ${S("d")}<sub>0</sub>）か、全部沈む（${S("A")} ＞ ${S("L")} − ${S("d")}<sub>0</sub>）と上の式は使えない。</p>`);
+  },
+  asks:[
+    ["押し下げる深さ A を変えても周期は変わるか（水面から飛び出さない範囲で）。", "変わらない（等時性）。復元力 −ρSg x の定数 k に A は入らない。"],
+    ["底面積 S を2倍にすると周期は何倍か。", "変わらない。k ＝ ρSg は2倍になるが、質量 m ＝ ρ′SL も2倍になり、T ＝ 2π√(ρ′L/(ρg)) に S は残らない。"],
+    ["物体の密度 ρ′ を4倍にすると周期は何倍か。", "2倍（√4）。重い（密度が大きい）物体ほど深く沈み、ゆっくり振れる。"],
+    ["液体を水から食塩水（密度が大きい）にかえると周期はどうなるか。", "短くなる。同じ変位でも浮力の変化が大きく、復元力が強いから（T ∝ 1/√ρ）。"],
+    ["A を大きくして、つり合いの沈み d₀ をこえると、運動はどうなるか。", "最も浅いところで物体が水面から飛び出し、空中では浮力が 0（重力だけ）になるので、復元力が −kx より小さくなり、単振動でなくなる。"]
+  ]
+};
+
+LAB.app({title:"単振動ラボ", modes:{circle, spring:springMode, pendulum, buoy}});
 })();
 </script>
 </body>
