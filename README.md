@@ -27,7 +27,7 @@ units/            単元ファイル（1単元＝1ファイル）
 anim/             シミュレーター
   lab.css         シミュレーター共通の見た目
   lab-common.js   シミュレーター共通部品（LAB.app でタブ・設定・再生・グラフ・URL 指定を組み立てる）
-  deriv.html      速度・加速度の定義ラボ（#vel 平均の速度 → 瞬間の速度／#acc 平均の加速度 → 瞬間の加速度。path ＝ eight・circle・throw）
+  deriv.html      速度・加速度の定義ラボ（#vel 平均の速度 → 瞬間の速度／#acc 平均の加速度 → 瞬間の加速度。path ＝ eight・circle・throw／#rel 合成と相対の速度・加速度。ex ＝ train・crane・throws、view ＝ g・A）
   plane.html      平面運動ラボ（#proj 放物運動とベクトル／#range 角度と到達距離／#slope 斜面への投射）
   rigid.html      剛体ラボ（#moment 力のモーメント／#balance 重心とてこ／#ladder はしごのつり合い）
   momentum.html   運動量ラボ（#collide 一直線上の衝突／#merge 平面での合体／#bounce 床ではね返るボール）

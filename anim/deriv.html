@@ -281,7 +281,147 @@ const accMode = {
   ]
 };
 
-LAB.app({title:"速度・加速度の定義ラボ", modes:{vel:velMode, acc:accMode}});
+/* ---------- 合成と相対（速度・加速度） ---------- */
+const G = 9.8;
+const EX_DEF = {train:{aA:3, u:6, th:90}, crane:{aA:1, u:0, th:90}, throws:{aA:0, u:11, th:110}};
+let lastEx = null;
+/* A・B ともに加速度一定。地面に対する r0, v0, a */
+function relSetup(P){
+  const th = P.th*PI/180, uc = P.u*cos(th), us = P.u*sin(th);
+  if(P.ex === "train") return {A:{r0:[0,1], v0:[4,0], a:[P.aA,0]}, B:{r0:[0,1], v0:[4 + uc, us], a:[0,-G]},
+    stop:(t, s) => s.rB(t)[1] <= 0, nameA:"電車 A（手の位置）", nameB:"ボール B"};
+  if(P.ex === "crane") return {A:{r0:[0,6], v0:[1,0], a:[P.aA,0]}, B:{r0:[0,1.5], v0:[1 + uc, us], a:[P.aA, 1.2]},
+    stop:(t, s) => s.rB(t)[1] - s.rA(t)[1] >= -0.8 || t >= 4, nameA:"台車 A", nameB:"荷物 B"};
+  return {A:{r0:[0,0], v0:[10*cos(PI/3), 10*sin(PI/3)], a:[0,-G]}, B:{r0:[8,0], v0:[uc, us], a:[0,-G]},
+    stop:(t, s) => s.rA(t)[1] < 0 || s.rB(t)[1] < 0, nameA:"ボール A", nameB:"ボール B"};
+}
+const posC = (o, t) => [o.r0[0] + o.v0[0]*t + 0.5*o.a[0]*t*t, o.r0[1] + o.v0[1]*t + 0.5*o.a[1]*t*t];
+const velC = (o, t) => [o.v0[0] + o.a[0]*t, o.v0[1] + o.a[1]*t];
+function bbox(pts, m){ let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; pts.forEach(p => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }); return {x0:x0 - m, x1:x1 + m, y0:y0 - m, y1:y1 + m}; }
+const VS = (s, sb) => `${V(s)}<sub>${sb}</sub>`;
+
+const relMode = {
+  label:"合成と相対",
+  params:[["aA","乗り物 A の加速度（右向き）",0,9.8,0.1,"m/s²",1,3],["u","B を打ち出す速さ（乗り物の中では A に対して）",0,15,0.5,"m/s",1,6],["th","打ち出す向き（右を 0°、上を 90°）",0,180,5,"°",0,90]],
+  selects:[["ex","例",[["train","加速する電車の中で投げ上げる"],["crane","クレーンで荷物を動かす（合成）"],["throws","2つのボールを同時に投げる"]],"train"],["view","見る立場",[["g","地面から見る"],["A","A といっしょに動いて見る"]],"g"]],
+  toggles:[["trail","軌跡",true],["dots","0.25 s ごとの位置",true],["vec","速度・加速度の矢印",true]],
+  timed:true, graphs:2, dt:1/120,
+  legend:`<span><i style="background:var(--pos)"></i>A の速度 ${VS("v","A")}</span><span><i style="background:var(--hl2)"></i>A から見た B（${VS("v","AB")}・${VS("a","AB")}）</span><span><i style="background:var(--vel)"></i>${VS("v","B")}</span><span><i style="background:var(--acc)"></i>${VS("a","B")}</span><span>実線は速度、点線は加速度</span>`,
+  reset(P, S){
+    if(lastEx !== null && P.ex !== lastEx) Object.assign(P, EX_DEF[P.ex]);
+    lastEx = P.ex;
+    const s = relSetup(P); s.rA = t => posC(s.A, t); s.rB = t => posC(s.B, t); s.vA = t => velC(s.A, t); s.vB = t => velC(s.B, t);
+    let T = 0.02; while(T < 6 && !s.stop(T, s)) T += 0.002; s.dur = Math.max(T, 0.3);
+    const ptsG = [], ptsA = [[0,0]]; let vm = 1e-6;
+    for(let i = 0; i <= 120; i++){ const t = s.dur*i/120, a = s.rA(t), b = s.rB(t); ptsG.push(a, b); ptsA.push(sub(b, a));
+      vm = Math.max(vm, len(s.vA(t)), len(s.vB(t)), len(sub(s.vB(t), s.vA(t)))); }
+    if(P.ex === "train"){ ptsG.push([-3,0], [s.rA(s.dur)[0] + 3, 2.6]); ptsA.push([-3,-1.2], [3, 1.8]); }
+    if(P.ex === "crane"){ ptsG.push([-1, 6.4], [s.rA(s.dur)[0] + 1, 0]); ptsA.push([0, 0.4]); }
+    if(P.ex === "throws") ptsG.push([0, 0]);
+    s.bG = bbox(ptsG, 0.8); s.bA = bbox(ptsA, 0.8); s.vm = vm;
+    s.am = Math.max(len(s.A.a), len(s.B.a), len(sub(s.B.a, s.A.a)), 1e-6);
+    S.s = s;
+  },
+  duration(P, S){ return S.s.dur; }, step(){},
+  draw(ctx){
+    const {P, T, t} = ctx, s = ctx.S.s, gv = P.view === "g";
+    const ctl = document.getElementById("c-aA"); if(ctl) ctl.closest(".ctrl").hidden = P.ex === "throws";
+    const ar = window.innerWidth < 600 ? "3 / 4" : "16 / 10"; if(ctx.stage.style.aspectRatio !== ar) ctx.stage.style.aspectRatio = ar;
+    const {c, w, h} = prep(ctx.stage);
+    const ink2 = css("--ink2"), ink3 = css("--ink3"), pos = css("--pos"), vel = css("--vel"), hl2 = css("--hl2"), acc = css("--acc"), neg = css("--neg"), grd = css("--ground");
+    const side = w > h*1.15;
+    const R1 = side ? {x:0, y:0, w:w*0.64, h} : {x:0, y:0, w, h:h*0.6};
+    const R2 = side ? {x:w*0.64, y:0, w:w*0.36, h} : {x:0, y:h*0.6, w, h:h*0.4};
+    const b = gv ? s.bG : s.bA, tf = fitR({x:R1.x, y:R1.y + 16, w:R1.w, h:R1.h - 16}, b, 6);
+    const rAt = s.rA(t), V2 = p => gv ? p : sub(p, rAt), X = p => tf.X(V2(p)[0]), Y = p => tf.Y(V2(p)[1]);
+    label(c, gv ? "地面から見る" : `${s.nameA.replace(/（.*）/, "")} といっしょに動いて見る`, R1.x + 6, R1.y + 10, ink2, "left", uiFont(12, true));
+    c.save(); c.beginPath(); c.rect(R1.x, R1.y + 18, R1.w, R1.h - 18); c.clip();
+    // 地面（斜線の目盛りが動くと、A から見て地面が動いているのがわかる）
+    const gx0 = (gv ? b.x0 : b.x0 + rAt[0]) - 1, gx1 = (gv ? b.x1 : b.x1 + rAt[0]) + 1;
+    c.strokeStyle = grd; c.lineWidth = 2; c.beginPath(); c.moveTo(X([gx0, 0]), Y([gx0, 0])); c.lineTo(X([gx1, 0]), Y([gx1, 0])); c.stroke();
+    c.lineWidth = 1; for(let k = Math.ceil(gx0); k <= gx1; k++){ c.beginPath(); c.moveTo(X([k, 0]), Y([k, 0])); c.lineTo(X([k - 0.3, -0.3]), Y([k - 0.3, -0.3])); c.stroke(); }
+    if(P.ex === "train"){
+      const xa = rAt[0]; c.strokeStyle = ink2; c.lineWidth = 1.8; c.strokeRect(X([xa - 3, 2.6]), Y([xa - 3, 2.6]), 6*tf.s, 2.6*tf.s);
+      disc(c, X([xa - 2, 0]), Y([xa - 2, 0]) - 4, 4, null, ink2); disc(c, X([xa + 2, 0]), Y([xa + 2, 0]) - 4, 4, null, ink2);
+      label(c, "電車", X([xa - 2.9, 2.4]), Y([xa - 2.9, 2.4]), ink3, "left", uiFont(11));
+    }
+    if(P.ex === "crane"){
+      c.strokeStyle = ink2; c.lineWidth = 2; c.beginPath(); c.moveTo(X([gx0, 6.3]), Y([gx0, 6.3])); c.lineTo(X([gx1, 6.3]), Y([gx1, 6.3])); c.stroke();
+      const rb = s.rB(t); c.lineWidth = 1.2; c.beginPath(); c.moveTo(X(rAt), Y(rAt)); c.lineTo(X(rb), Y(rb)); c.stroke();
+      c.fillStyle = ink3; c.fillRect(X(rAt) - 10, Y(rAt) - 6, 20, 10);
+    }
+    // 軌跡と等時間間隔の点
+    const at = (fn, tt) => gv ? fn(tt) : sub(fn(tt), s.rA(tt));
+    const trace = (fn, col) => {
+      if(T.trail){
+        c.strokeStyle = col; c.lineWidth = 1.4; c.globalAlpha = 0.25; c.beginPath();
+        for(let i = 0; i <= 160; i++){ const p = at(fn, s.dur*i/160); i ? c.lineTo(tf.X(p[0]), tf.Y(p[1])) : c.moveTo(tf.X(p[0]), tf.Y(p[1])); } c.stroke(); c.globalAlpha = 1;
+        c.lineWidth = 2; c.beginPath();
+        for(let i = 0; i <= 160; i++){ const p = at(fn, Math.min(t, s.dur)*i/160); i ? c.lineTo(tf.X(p[0]), tf.Y(p[1])) : c.moveTo(tf.X(p[0]), tf.Y(p[1])); } c.stroke();
+      }
+      if(T.dots) for(let k = 0; k*0.25 <= t + 1e-9; k++){ const p = at(fn, k*0.25); disc(c, tf.X(p[0]), tf.Y(p[1]), 2.8, col); }
+    };
+    if(gv) trace(s.rA, pos);
+    trace(s.rB, neg);
+    const rB = s.rB(t), vA = s.vA(t), vB = s.vB(t), vAB = sub(vB, vA), aA = s.A.a, aB = s.B.a, aAB = sub(aB, aA);
+    const span = Math.max(b.x1 - b.x0, b.y1 - b.y0), kv = 0.16*span/s.vm, ka = 0.13*span/s.am;
+    const Ax = X(rAt), Ay = Y(rAt), Bx = X(rB), By = Y(rB);
+    if(T.vec){
+      const vecAt = (x, y, v, k, col, dash, name, sb) => {
+        const ex = x + v[0]*k*tf.s, ey = y - v[1]*k*tf.s; if(hypot(ex - x, ey - y) < 3) return;
+        arrow(c, x, y, ex, ey, col, dash ? 2 : 2.6, dash ? [6,4] : null);
+        const [lx, ly] = tipPos(x, y, ex, ey, 13); vlab(c, name, lx, ly, col, {align:"center", post:sb, px:13});
+      };
+      if(gv){ vecAt(Ax, Ay, vA, kv, pos, false, "v", "A"); vecAt(Bx, By, vB, kv, vel, false, "v", "B"); vecAt(Bx, By, aB, ka, acc, true, "a", "B"); }
+      else { vecAt(Bx, By, vAB, kv, hl2, false, "v", "AB"); vecAt(Bx, By, aAB, ka, hl2, true, "a", "AB"); }
+    }
+    disc(c, Ax, Ay, 6, pos); label(c, "A", Ax - 9, Ay - 11, pos, "right", symFont(14, true));
+    disc(c, Bx, By, 6, neg); label(c, "B", Bx + 9, By - 11, neg, "left", symFont(14, true));
+    c.restore();
+    // 右：ベクトルの三角形
+    c.strokeStyle = css("--line"); c.lineWidth = 1; c.beginPath(); if(side){ c.moveTo(R2.x, 6); c.lineTo(R2.x, h - 6); } else { c.moveTo(6, R2.y); c.lineTo(w - 6, R2.y); } c.stroke();
+    const tri = (R, va, vab, vb, colB, sym, title, max) => {
+      label(c, title, R.x + 8, R.y + 12, ink2, "left", uiFont(12, true));
+      const k = 0.44*Math.min(R.w, R.h - 24)/max;
+      const ox = R.x + R.w/2 - vb[0]*k/2, oy = R.y + 24 + (R.h - 24)/2 + vb[1]*k/2;
+      const p1 = [ox + va[0]*k, oy - va[1]*k], p2 = [ox + vb[0]*k, oy - vb[1]*k];
+      arrow(c, ox, oy, p1[0], p1[1], pos, 2.2); arrow(c, p1[0], p1[1], p2[0], p2[1], hl2, 2.2); arrow(c, ox, oy, p2[0], p2[1], colB, 3);
+      disc(c, ox, oy, 3, ink2);
+      const lab = (p, q, sb, col, sgn) => { const L = hypot(q[0]-p[0], q[1]-p[1]); if(L < 10) return; const nx = -(q[1]-p[1])/L*sgn, ny = (q[0]-p[0])/L*sgn; vlab(c, sym, (p[0]+q[0])/2 + nx*16, (p[1]+q[1])/2 + ny*16, col, {align:"center", post:sb, px:13}); };
+      lab([ox, oy], p1, "A", pos, 1); lab(p1, p2, "AB", hl2, 1); lab([ox, oy], p2, "B", colB, -1);
+      if(len(vab) < 1e-9) vlab(c, sym, R.x + R.w - 50, R.y + R.h - 12, hl2, {post:"AB ＝ 0", px:13});
+    };
+    const hf = side ? [{x:R2.x, y:R2.y, w:R2.w, h:R2.h/2}, {x:R2.x, y:R2.y + R2.h/2, w:R2.w, h:R2.h/2}] : [{x:R2.x, y:R2.y, w:R2.w/2, h:R2.h}, {x:R2.x + R2.w/2, y:R2.y, w:R2.w/2, h:R2.h}];
+    tri(hf[0], vA, vAB, vB, vel, "v", "速度の三角形", s.vm);
+    tri(hf[1], aA, aAB, aB, acc, "a", "加速度の三角形", s.am);
+    // 文
+    const msg = {
+      train: gv ? "地面から見ると、ボールの加速度は g（鉛直下向き）だけ。初速は「電車の速度 ＋ 電車に対して投げた速度」の合成" : (P.aA > 0 ? "電車から見ると、ボールは後ろへずれていく。aAB ＝ g − aA（後ろ斜め下向きで一定）" : "等速の電車から見ると、地上と同じように運動する（aAB ＝ g）"),
+      crane: gv ? "地面から見た荷物の加速度は aB ＝ aA ＋ aAB（斜め上向きで一定）" : "台車から見ると、荷物は真上に加速して上がるだけ",
+      throws: gv ? "地面から見ると、どちらも放物線" : "A から見ると、B は等速直線運動（aAB ＝ g − g ＝ 0）。0.25 s ごとの点が等間隔に並ぶ"
+    }[P.ex];
+    ctx.banner(msg, gv ? "--ink2" : "--hl2");
+    const D = s.dur;
+    graph(ctx.graphs[0], {title:"vₓ-t", unit:"m/s", tmax:D, t, series:[{fn:tt => s.vB(tt)[0], color:"--vel", name:"地面から"}, {fn:tt => s.vB(tt)[0] - s.vA(tt)[0], color:"--hl2", name:"A から"}]});
+    graph(ctx.graphs[1], {title:"vᵧ-t", unit:"m/s", tmax:D, t, series:[{fn:tt => s.vB(tt)[1], color:"--vel", name:"地面から"}, {fn:tt => s.vB(tt)[1] - s.vA(tt)[1], color:"--hl2", name:"A から"}]});
+    ctx.ro(table([
+      [`${s.nameA}：${VS("v","A")}・${VS("a","A")}`, `${vec(vA, 1)} m/s・${vec(aA, 1)} m/s²`],
+      [`${s.nameB}（地面から）：${VS("v","B")}・${VS("a","B")}`, `${vec(vB, 1)} m/s・${vec(aB, 1)} m/s²`],
+      [`A から見た B：${VS("v","AB")}・${VS("a","AB")}`, `${vec(vAB, 1)} m/s・${vec(aAB, 1)} m/s²`]
+    ]));
+    ctx.eqs(`<p class="eq"><span class="tag n">微積なし</span>合成 ${VS("v","B")} ＝ ${VS("v","A")} ＋ ${VS("v","AB")}、相対 ${VS("v","AB")} ＝ ${VS("v","B")} − ${VS("v","A")}。変化を Δ${S("t")} で割ると ${frac("Δ"+VS("v","AB"), "Δ"+S("t"))} ＝ ${frac("Δ"+VS("v","B"), "Δ"+S("t"))} − ${frac("Δ"+VS("v","A"), "Δ"+S("t"))} なので、${VS("a","AB")} ＝ ${VS("a","B")} − ${VS("a","A")}（合成では ${VS("a","B")} ＝ ${VS("a","A")} ＋ ${VS("a","AB")}）</p>
+<p class="eq"><span class="tag c">微積</span>${VS("r","B")} ＝ ${VS("r","A")} ＋ ${VS("r","AB")} を ${S("t")} で微分して ${VS("v","B")} ＝ ${VS("v","A")} ＋ ${VS("v","AB")}、もう一度微分して ${VS("a","B")} ＝ ${VS("a","A")} ＋ ${VS("a","AB")}</p>
+<p class="note">グラフの傾きは加速度の成分。2本の傾きの差が A の加速度。速度が一定のときの合成・相対速度（川を渡る船、雨と走る人）は、物理基礎ラボの「相対速度」で確かめられる。</p>`);
+  },
+  asks:[
+    ["「2つのボールを同時に投げる」を A から見ると、B はどう動くか。", "まっすぐ等速で動く。a<sub>AB</sub> ＝ g − g ＝ 0 だから。A から見て B が自分のほうへ向かっていれば、必ず衝突する（モンキーハンティングの理由）。"],
+    ["「加速する電車」で投げる速さを 0（静かに放す）にする。電車から見ると、ボールはどう落ちるか。", "後ろ斜め下へ、まっすぐ落ちる。初速 0 で、加速度 a<sub>AB</sub> ＝ g − a<sub>A</sub> が一定だから。鉛直からの傾き θ は tan θ ＝ a<sub>A</sub>/g。単元4の慣性力 −m a<sub>A</sub> で説明できる。"],
+    ["電車の加速度を 0 にして真上に投げると、電車から見たボールはどうなるか。", "真上に上がって手元にもどる。等速で動く乗り物から見ても、加速度は地上と同じ g。"],
+    ["「クレーン」で、地面から見た荷物の軌跡はどんな形か。加速度の向きは？", "放物線。加速度は a<sub>B</sub> ＝ a<sub>A</sub>（右向き）＋ a<sub>AB</sub>（上向き）で、斜め上向きの一定。台車に初速があるので、速度と加速度の向きがずれて曲がる。"]
+  ]
+};
+
+LAB.app({title:"速度・加速度の定義ラボ", modes:{vel:velMode, acc:accMode, rel:relMode}});
 })();
 </script>
 </body>

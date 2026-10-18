@@ -45,7 +45,8 @@ const DEF_TABLE = `<p style='margin:4px 0;font-size:14px;color:var(--muted)'>小
 ]},
 { title:"2 速度の合成と相対速度" + BASIC, rows:[
   ["速度の合成","動くもの（水・電車）に対する速度と、そのもの自身の速度を、矢印として足し合わせる",`${B("v")} ＝ ${B("v")}₁ ＋ ${B("v")}₂（平行四辺形の規則）`],
-  ["相対速度","A から見た B の速度（A に対する B の相対速度）。見ている人の速度を引く",`${vAB} ＝ ${vB} − ${vA}`]
+  ["相対速度","A から見た B の速度（A に対する B の相対速度）。見ている人の速度を引く",`${vAB} ＝ ${vB} − ${vA}`],
+  ["相対加速度","A から見た B の加速度。相対速度の変化の割合で、見ている人の加速度を引く（合成なら足す）",`${B("a")}<sub>AB</sub> ＝ ${B("a")}<sub>B</sub> − ${B("a")}<sub>A</sub> ＝ ${d("d"+vAB,"d"+t)}　${CALC}`]
 ]},
 { title:"3 放物運動", rows:[
   ["運動の独立性","水平方向と鉛直方向の運動は互いに影響しないので、別々に考えられる","水平：等速直線運動　鉛直：加速度 −" + g + " の等加速度運動"],
@@ -107,7 +108,7 @@ const UNITQ = ["m/s", "m/s²", "m", "s", "単位なし"];
 
 const SECTIONS = [
 { id:"def", advice:"速度・加速度をベクトルとして言えるか、定義カードで確かめよう。「速さが一定でも加速度がある」場合をおさえよう。", tab:"①定義", title:"① 定義カード",
-  intro:`物理基礎の「一直線上の運動」を、平面（2次元）に広げます。位置・速度・加速度を<b>ベクトル</b>として扱い、水平と鉛直に分けて考えます。<br>シミュレーターで確かめよう：<br>${ANIM("anim/deriv.html#vel","平均の速度 → 瞬間の速度")}${ANIM("anim/deriv.html#acc","平均の加速度 → 瞬間の加速度")}${ANIM("anim/plane.html#proj","放物運動とベクトル")}${ANIM("anim/plane.html#range","角度と到達距離")}${ANIM("anim/plane.html#slope","斜面への投射")}${ANIM(BASICLAB+"anim/relative.html#plane-sum","川を渡る船（物理基礎ラボ）")}`,
+  intro:`物理基礎の「一直線上の運動」を、平面（2次元）に広げます。位置・速度・加速度を<b>ベクトル</b>として扱い、水平と鉛直に分けて考えます。<br>シミュレーターで確かめよう：<br>${ANIM("anim/deriv.html#vel","平均の速度 → 瞬間の速度")}${ANIM("anim/deriv.html#acc","平均の加速度 → 瞬間の加速度")}${ANIM("anim/deriv.html#rel","合成と相対（速度・加速度）")}${ANIM("anim/plane.html#proj","放物運動とベクトル")}${ANIM("anim/plane.html#range","角度と到達距離")}${ANIM("anim/plane.html#slope","斜面への投射")}${ANIM(BASICLAB+"anim/relative.html#plane-sum","川を渡る船（物理基礎ラボ）")}`,
   ref:{label:"定義カードと導出を見る", html:DEF_TABLE + DERIVE},
   groups:[
   { title:"A. 位置・速度・加速度", qs:[
@@ -124,7 +125,7 @@ const SECTIONS = [
      options:["0（変位が 0）","1周の道のり ÷ かかった時間","最高速度の半分"],answer:0,
      explain:"平均の速度 ＝ 変位 ÷ 時間。始めと終わりの位置が同じなので変位は 0 です。道のり ÷ 時間は「平均の速さ」です。"}
   ]},
-  { title:"B. 速度の合成と相対速度" + BASIC, lead:`${ANIM(BASICLAB+"anim/relative.html#plane-rel","平面の相対速度（物理基礎ラボ）")}`, qs:[
+  { title:"B. 速度の合成と相対速度" + BASIC, lead:`${ANIM(BASICLAB+"anim/relative.html#plane-rel","平面の相対速度（物理基礎ラボ）")}${ANIM("anim/deriv.html#rel&ex=throws&view=A","加速度があるときの合成と相対")}`, qs:[
     {id:"d5",type:"blanks",text:`A から見た B の速度は ${vAB} ＝ {0}。平面では、この引き算を{1}で行う。`,
      options:[[`${vB} − ${vA}`,`${vA} − ${vB}`,`${vA} ＋ ${vB}`],["矢印（ベクトル）","速さの数値だけ"]],answer:[0,0],
      explain:`「見られる物体の速度 − 見ている人の速度」。${vB} − ${vA} ＝ ${vB} ＋ (−${vA}) なので、${vA} を逆向きにした矢印を ${vB} につなぎます。`},
