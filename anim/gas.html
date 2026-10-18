@@ -97,6 +97,174 @@ const kinetic = {
   ]
 };
 
+/* ---------- 1個の分子と壁・ピストンのエネルギーのやりとり（2次元モデル、m ＝ 1） ---------- */
+const CG = 0.07;                                  // 速さの目盛り：1成分の標準偏差 ＝ CG√T
+const kinE = q => 0.5*(q.vx*q.vx + q.vy*q.vy);    // 運動エネルギー（質量 1）
+const toE = K => K/(CG*CG)*0.0138;                // ×10⁻²¹ J（2次元：平均運動エネルギー ＝ kT）
+const toV = v => v/CG*Math.sqrt(Rg/0.028);        // m/s（窒素分子として）
+const fromV = v => v*CG/Math.sqrt(Rg/0.028);
+const sgn = x => (x >= 0 ? "＋" : "−") + f(Math.abs(x), 2);
+function bars(cv, evs, title, avg){
+  const {c:g, w:gw, h:gh} = prep(cv), ink2 = css("--ink2"), ink3 = css("--ink3");
+  g.font = uiFont(12); g.fillStyle = ink2; g.textBaseline = "middle"; g.textAlign = "left"; g.fillText(title, 12, 10);
+  const pl = 10, pr = 10, pt = 24, pb = 16, y0 = pt + (gh - pt - pb)/2, show = evs.slice(-24);
+  const mx = Math.max(0.5, ...show.map(e => Math.abs(toE(e.dK))))*1.2, bw = (gw - pl - pr)/24;
+  g.strokeStyle = css("--grid2"); g.lineWidth = 1; g.beginPath(); g.moveTo(pl, y0); g.lineTo(gw - pr, y0); g.stroke();
+  show.forEach((e, i) => { const v = toE(e.dK), hh = v/mx*(gh - pt - pb)/2; g.fillStyle = v >= 0 ? css("--neg") : css("--pos"); g.fillRect(pl + i*bw + 1, hh >= 0 ? y0 - hh : y0, bw - 2, Math.abs(hh)); });
+  if(evs.length){ const m = evs.reduce((a, e) => a + toE(e.dK), 0)/evs.length, Y = y0 - m/mx*(gh - pt - pb)/2; g.strokeStyle = css("--acc"); g.lineWidth = 2; g.setLineDash([5, 4]); g.beginPath(); g.moveTo(pl, Y); g.lineTo(gw - pr, Y); g.stroke(); g.setLineDash([]); g.font = numFont(11); g.fillStyle = css("--acc"); g.textAlign = "right"; g.fillText(`${avg} ${m >= 0 ? "＋" : "−"}${f(Math.abs(m), 2)}`, gw - pr, gh - 5); }
+  g.font = numFont(10); g.fillStyle = ink3; g.textAlign = "left"; g.fillText("古 → 新", pl, gh - 5);
+}
+
+/* ---------- 加熱（冷却）された壁に衝突する分子 ---------- */
+const MU = 3, WOM = 60, RM = 0.022, RA = 0.05, WX = 0.62;   // 壁の原子の質量（分子の3倍）、ばねの角振動数、半径、壁の位置
+const wall = {
+  label:"壁との衝突（加熱・冷却）",
+  params:[["Tg","分子のはじめの温度 "+S("T")+"<sub>気体</sub>",100,1200,10,"K",0,300],["Tw","壁の温度 "+S("T")+"<sub>壁</sub>",100,1200,10,"K",0,900]],
+  toggles:[["trail","軌跡を表示",true]],
+  timed:true, graphs:2, dt:1/240,
+  legend:`<span><i style="background:var(--neg)"></i>運動エネルギーを得た</span><span><i style="background:var(--pos)"></i>失った</span><span><i style="background:var(--acc)"></i>平均</span>`,
+  reset(P, St){
+    const r = rng(777 + P.Tg), sa = CG*Math.sqrt(P.Tw/MU), v0 = Math.SQRT2*CG*Math.sqrt(P.Tg);
+    St.r = r; St.m = {x:0.2, y:0.45, vx:v0*Math.cos(0.5), vy:v0*Math.sin(0.5)};
+    St.at = []; for(let i = 0; i < 8; i++) St.at.push([WX, (i + 0.5)/8]); for(let i = 0; i <= 8; i++) St.at.push([WX + 0.108, i/8]);
+    St.at = St.at.map(s => ({sx:s[0], sy:s[1], x:s[0] + sa/WOM*gauss(r), y:s[1] + sa/WOM*gauss(r), vx:sa*gauss(r), vy:sa*gauss(r)}));
+    St.ev = []; St.pts = [[0, toE(kinE(St.m))]]; St.avg = [[0, toE(kinE(St.m))]]; St.sumK = 0; St.na = 0; St.trail = []; St.n = 0; St.lastHit = -9;
+  },
+  duration(){ return 60; },
+  step(P, St, dt, t){
+    const r = St.r, sa = CG*Math.sqrt(P.Tw/MU), gam = 3, q = St.m;
+    St.at.forEach(a => {
+      a.vx += (-WOM*WOM*(a.x - a.sx) - gam*a.vx)*dt + Math.sqrt(2*gam*dt)*sa*gauss(r);
+      a.vy += (-WOM*WOM*(a.y - a.sy) - gam*a.vy)*dt + Math.sqrt(2*gam*dt)*sa*gauss(r);
+      a.x += a.vx*dt; a.y += a.vy*dt;
+    });
+    const K0 = kinE(q); q.x += q.vx*dt; q.y += q.vy*dt;
+    if(q.x < RM){ q.x = 2*RM - q.x; q.vx = -q.vx; }
+    if(q.x > WX + 0.22){ q.x = 2*(WX + 0.22) - q.x; q.vx = -q.vx; }
+    if(q.y < RM){ q.y = 2*RM - q.y; q.vy = -q.vy; }
+    if(q.y > 1 - RM){ q.y = 2*(1 - RM) - q.y; q.vy = -q.vy; }
+    let hit = false;
+    St.at.forEach(a => {
+      const dx = q.x - a.x, dy = q.y - a.y, d = Math.hypot(dx, dy);
+      if(d >= RM + RA || d < 1e-9) return;
+      const nx = dx/d, ny = dy/d, vn = (q.vx - a.vx)*nx + (q.vy - a.vy)*ny;
+      q.x = a.x + nx*(RM + RA); q.y = a.y + ny*(RM + RA);
+      if(vn < 0){ const J = -2*vn/(1 + 1/MU); q.vx += J*nx; q.vy += J*ny; a.vx -= J/MU*nx; a.vy -= J/MU*ny; hit = true; }
+    });
+    const K1 = kinE(q);
+    St.sumK += toE(K1)*dt; if(++St.na % 4 === 0) St.avg.push([t + dt, St.sumK/(t + dt)]);
+    if(hit){
+      const e = St.ev[St.ev.length - 1];
+      if(e && t - St.lastHit < 0.06){ e.K1 = K1; e.dK = K1 - e.K0; e.t = t; } else St.ev.push({t, K0, K1, dK:K1 - K0, x:q.x, y:q.y});
+      St.lastHit = t; St.pts.push([t, toE(K0)], [t, toE(K1)]);
+    } else if(++St.n % 4 === 0) St.pts.push([t + dt, toE(K1)]);
+    if(St.n % 3 === 0){ St.trail.push([q.x, q.y]); if(St.trail.length > 90) St.trail.shift(); }
+  },
+  draw(ctx){
+    const {P, S:St, t, T} = ctx; const {c, w, h} = prep(ctx.stage);
+    const tf = fit(w, h, {x0:-0.04, x1:WX + 0.3, y0:-0.12, y1:1.03}, 8), s = tf.s;
+    const ink = css("--ink"), ink2 = css("--ink2"), q = St.m, K = kinE(q), wx = WX - 0.045;
+    c.fillStyle = css("--surface2"); c.fillRect(tf.X(0), tf.Y(1), wx*s, s);
+    c.fillStyle = heat(P.Tw); c.globalAlpha = 0.16; c.fillRect(tf.X(wx), tf.Y(1), 0.27*s, s); c.globalAlpha = 1;
+    c.strokeStyle = ink2; c.lineWidth = 2.5; c.beginPath(); c.moveTo(tf.X(wx), tf.Y(1)); c.lineTo(tf.X(0), tf.Y(1)); c.lineTo(tf.X(0), tf.Y(0)); c.lineTo(tf.X(wx), tf.Y(0)); c.stroke();
+    c.save(); c.beginPath(); c.rect(tf.X(wx - 0.05), tf.Y(1), 0.4*s, s); c.clip();
+    St.at.forEach(a => { c.beginPath(); c.arc(tf.X(a.x), tf.Y(a.y), RA*s, 0, 7); c.fillStyle = heat(P.Tw); c.globalAlpha = 0.75; c.fill(); c.globalAlpha = 1; c.strokeStyle = ink2; c.lineWidth = 1.2; c.stroke(); });
+    c.restore();
+    if(T.trail && St.trail.length > 1){ c.strokeStyle = css("--acc"); c.globalAlpha = 0.5; c.lineWidth = 1.4; c.beginPath(); St.trail.forEach((p, i) => i ? c.lineTo(tf.X(p[0]), tf.Y(p[1])) : c.moveTo(tf.X(p[0]), tf.Y(p[1]))); c.stroke(); c.globalAlpha = 1; }
+    const sp = Math.hypot(q.vx, q.vy);
+    arrow(c, tf.X(q.x), tf.Y(q.y), tf.X(q.x) + q.vx*0.16*s, tf.Y(q.y) - q.vy*0.16*s, css("--vel"), 2.6);
+    disc(c, tf.X(q.x), tf.Y(q.y), Math.max(5, RM*s), heat(K/(CG*CG)), ink);
+    const ev = St.ev[St.ev.length - 1];
+    if(ev && t - ev.t < 1.1){ const col = ev.dK >= 0 ? css("--neg") : css("--pos"); c.globalAlpha = Math.min(1, 1.6 - (t - ev.t)*1.2); label(c, `ΔK ＝ ${ev.dK >= 0 ? "＋" : "−"}${f(Math.abs(toE(ev.dK)), 2)}`, tf.X(WX - 0.08), tf.Y(Math.min(0.93, Math.max(0.07, ev.y))), col, "right", uiFont(13, true)); c.globalAlpha = 1; }
+    label(c, `分子の K ＝ ${f(toE(K), 2)} ×10⁻²¹ J`, tf.X(0) + 8, tf.Y(1) + 14, ink, "left", uiFont(12, true));
+    label(c, "断熱壁", tf.X(0), tf.Y(-0.06), ink2, "left", uiFont(11));
+    label(c, `${P.Tw > P.Tg ? "加熱された壁" : P.Tw < P.Tg ? "冷却された壁" : "気体と同じ温度の壁"} ${P.Tw} K`, tf.X(WX + 0.3), tf.Y(-0.06), ink2, "right", uiFont(11, true));
+    const n = St.ev.length, mean = n ? St.ev.reduce((a, e) => a + toE(e.dK), 0)/n : 0, Kw = toE(P.Tw*CG*CG), Kn = toE(K);
+    const ymax = Math.max(Kw, toE(P.Tg*CG*CG), ...St.pts.map(p => p[1]))*1.25;
+    graph(ctx.graphs[0], {title:"分子の K", unit:"×10⁻²¹ J", tmax:ctx.dur, t, ylo:0, yhi:ymax, series:[{pts:St.pts, color:"--pos", name:"K"}, {pts:St.avg, color:"--acc", name:"平均"}, {fn:() => Kw, color:"--neg", name:"壁の kT"}]});
+    bars(ctx.graphs[1], St.ev, "衝突ごとの ΔK〔×10⁻²¹ J〕", "平均");
+    ctx.banner(n ? `衝突 ${n} 回：K ＝ ${f(St.pts[0][1], 2)} → ${f(Kn, 2)}（×10⁻²¹ J）。1回ごとには増減するが、平均すると壁の温度に対応する値 ${f(Kw, 2)} に近づく。` : "分子が壁に衝突するのを待っています…", "--ui");
+    const last = ev ? `${f(toE(ev.K0), 2)} → ${f(toE(ev.K1), 2)}（${sgn(toE(ev.dK))}）` : "—";
+    ctx.ro(table([[`衝突の回数`, `${n} 回`], [`いまの ${S("K")}`, `${f(Kn, 2)} ×10⁻²¹ J`], [`壁の温度に対応する平均運動エネルギー ${S("k")}${S("T")}<sub>壁</sub>`, `${f(Kw, 2)} ×10⁻²¹ J`], [`最後の衝突の ${S("K")}（×10⁻²¹ J）`, last], [`衝突ごとの Δ${S("K")} の平均`, n ? `${sgn(mean)} ×10⁻²¹ J` : "—"]]));
+    ctx.eqs(`<p class="eq">壁は固定されているが、壁をつくる原子は熱運動（振動）している。温度が高いほど激しく振動する。分子は壁の原子と弾性衝突し、運動エネルギーをやりとりする。</p><p class="eq">壁の原子が分子に向かってくるように動いていれば分子は加速され、遠ざかるように動いていれば減速される。壁が熱いと前者が多くなり、分子の運動エネルギーは平均として増える。これが「<b>熱の移動</b>」の分子レベルの姿である。</p><p class="eq">2次元モデルなので平均運動エネルギーは ${S("k")}${S("T")}（3次元では (3/2)${S("k")}${S("T")}）。窒素分子として換算している。</p>`);
+  },
+  asks:[
+    ["気体 300 K、壁 900 K で再生しよう。分子の K はどう変わっていくか。1回ごとの ΔK はいつも正か。", "平均として増え、壁の kT に近づく。1回ごとの ΔK は正のこともあれば負のこともある（壁の原子が遠ざかる向きに動いていたとき）。"],
+    ["壁の温度を 100 K にしよう。分子の K は平均してどうなるか。", "減っていく。冷たい壁の原子はゆっくり振動しているので、分子が運動エネルギーを渡す。"],
+    ["気体と壁をどちらも 300 K にしよう。K は平均してどうなるか。", "増減をくり返すだけで、平均としては変わらない。これが熱平衡で、熱の移動はない。"],
+    ["壁の温度を上げると、壁の原子の振動はどう見えるか。", "振動が大きく速くなる。壁の温度は、壁の原子の熱運動の激しさである。"]
+  ]
+};
+
+/* ---------- ピストンに衝突する分子（圧縮・膨張） ---------- */
+const piston = {
+  label:"ピストンとの衝突（圧縮・膨張）",
+  selects:[["dir","ピストンの動き",[["c","圧縮（押しこむ）"],["e","膨張（引きぬく）"]],"c"]],
+  params:[["u","ピストンの速さ "+S("u"),5,150,5,"m/s",0,15],["Tg","分子のはじめの温度 "+S("T"),100,1200,10,"K",0,300]],
+  toggles:[["trail","軌跡を表示",true]],
+  timed:true, graphs:2, dt:1/240,
+  legend:`<span><i style="background:var(--neg)"></i>運動エネルギーを得た</span><span><i style="background:var(--pos)"></i>失った</span><span><i style="background:var(--vel)"></i>分子の速度</span>`,
+  reset(P, St){
+    const v0 = Math.SQRT2*CG*Math.sqrt(P.Tg), comp = P.dir === "c";
+    St.m = {x:comp ? 0.3 : 0.2, y:0.45, vx:v0*Math.cos(0.3), vy:v0*Math.sin(0.3)};
+    St.xp = comp ? 1.0 : 0.5; St.goal = comp ? 0.5 : 1.0; St.moving = true;
+    St.ev = []; St.pts = [[0, toE(kinE(St.m))]]; St.trail = []; St.n = 0;
+  },
+  duration(P){ const um = fromV(P.u); return Math.min(40, 0.5/um + 3); },
+  step(P, St, dt, t){
+    const q = St.m, um = fromV(P.u), up = St.moving ? (P.dir === "c" ? -um : um) : 0;
+    if(St.moving){ St.xp += up*dt; if((P.dir === "c" && St.xp <= St.goal) || (P.dir === "e" && St.xp >= St.goal)){ St.xp = St.goal; St.moving = false; } }
+    const K0 = kinE(q), vin = q.vx; q.x += q.vx*dt; q.y += q.vy*dt;
+    if(q.x < RM){ q.x = 2*RM - q.x; q.vx = -q.vx; }
+    if(q.y < RM){ q.y = 2*RM - q.y; q.vy = -q.vy; }
+    if(q.y > 1 - RM){ q.y = 2*(1 - RM) - q.y; q.vy = -q.vy; }
+    let hit = false;
+    if(q.x > St.xp - RM){ q.vx = 2*up - q.vx; q.x = 2*(St.xp - RM) - q.x; hit = true; }
+    const K1 = kinE(q);
+    if(hit && up !== 0){ St.ev.push({t, K0, K1, dK:K1 - K0, vin, vout:q.vx, up, y:q.y}); St.pts.push([t, toE(K0)], [t, toE(K1)]); }
+    else if(++St.n % 4 === 0) St.pts.push([t + dt, toE(K1)]);
+    if(St.n % 3 === 0){ St.trail.push([q.x, q.y]); if(St.trail.length > 90) St.trail.shift(); }
+  },
+  draw(ctx){
+    const {P, S:St, t, T} = ctx; const {c, w, h} = prep(ctx.stage);
+    const tf = fit(w, h, {x0:-0.04, x1:1.3, y0:-0.12, y1:1.03}, 8), s = tf.s;
+    const ink = css("--ink"), ink2 = css("--ink2"), q = St.m, K = kinE(q), xp = St.xp, comp = P.dir === "c";
+    c.fillStyle = css("--surface2"); c.fillRect(tf.X(0), tf.Y(1), xp*s, s);
+    c.strokeStyle = ink2; c.lineWidth = 2.5; c.beginPath(); c.moveTo(tf.X(1.02), tf.Y(1)); c.lineTo(tf.X(0), tf.Y(1)); c.lineTo(tf.X(0), tf.Y(0)); c.lineTo(tf.X(1.02), tf.Y(0)); c.stroke();
+    c.fillStyle = ink2; c.fillRect(tf.X(xp), tf.Y(1) + 2, 9, s - 4); c.fillRect(tf.X(xp) + 9, tf.Y(0.5) - 4, (1.28 - xp)*s - 9, 8);
+    const u = St.moving ? (comp ? -1 : 1)*18 : 0;
+    if(u) { arrow(c, tf.X(xp) + 16, tf.Y(0.62), tf.X(xp) + 16 + u, tf.Y(0.62), css("--acc"), 3); }
+    label(c, St.moving ? `ピストン u ＝ ${P.u} m/s` : "ピストンは止まった", tf.X(1.3), tf.Y(-0.06), css("--acc"), "right", uiFont(11, true));
+    label(c, "断熱壁", tf.X(0), tf.Y(-0.06), ink2, "left", uiFont(11));
+    if(T.trail && St.trail.length > 1){ c.strokeStyle = css("--acc"); c.globalAlpha = 0.5; c.lineWidth = 1.4; c.beginPath(); St.trail.forEach((p, i) => i ? c.lineTo(tf.X(p[0]), tf.Y(p[1])) : c.moveTo(tf.X(p[0]), tf.Y(p[1]))); c.stroke(); c.globalAlpha = 1; }
+    arrow(c, tf.X(q.x), tf.Y(q.y), tf.X(q.x) + q.vx*0.16*s, tf.Y(q.y) - q.vy*0.16*s, css("--vel"), 2.6);
+    disc(c, tf.X(q.x), tf.Y(q.y), Math.max(5, RM*s), heat(K/(CG*CG)), ink);
+    const ev = St.ev[St.ev.length - 1];
+    if(ev && t - ev.t < 1.1){ c.globalAlpha = Math.min(1, 1.6 - (t - ev.t)*1.2); label(c, `ΔK ＝ ${ev.dK >= 0 ? "＋" : "−"}${f(Math.abs(toE(ev.dK)), 2)}`, tf.X(Math.min(xp, 1)) - 14, tf.Y(Math.min(0.9, Math.max(0.1, ev.y))) - 16, ev.dK >= 0 ? css("--neg") : css("--pos"), "right", uiFont(13, true)); c.globalAlpha = 1; }
+    label(c, `分子の K ＝ ${f(toE(K), 2)} ×10⁻²¹ J`, tf.X(0) + 8, tf.Y(1) + 14, ink, "left", uiFont(12, true));
+    const n = St.ev.length, K00 = St.pts[0][1], Kn = toE(K);
+    graph(ctx.graphs[0], {title:"分子の K", unit:"×10⁻²¹ J", tmax:ctx.dur, t, ylo:0, yhi:Math.max(K00*1.3, ...St.pts.map(p => p[1]))*1.15, series:[{pts:St.pts, color:"--pos", name:"K"}, {fn:() => K00, color:"--ghost", name:"はじめ"}]});
+    bars(ctx.graphs[1], St.ev, "衝突ごとの ΔK〔×10⁻²¹ J〕", "平均");
+    ctx.banner(n ? `衝突 ${n} 回：K ＝ ${f(K00, 2)} → ${f(Kn, 2)}（×10⁻²¹ J）。ピストンが${comp ? "押しこまれると分子の K は増え" : "引きぬかれると分子の K は減り"}ます。` : `ピストンが${comp ? "押しこまれて" : "引きぬかれて"}います。分子がぶつかるのを待っています…`, "--ui");
+    const rows = [[`衝突の回数`, `${n} 回`], [`いまの ${S("K")}`, `${f(Kn, 2)} ×10⁻²¹ J`], [`はじめの ${S("K")}`, `${f(K00, 2)} ×10⁻²¹ J`]];
+    if(ev){
+      const a = toV(ev.vin), b = toV(Math.abs(ev.vout)), uu = P.u, sg = comp ? 1 : -1;
+      rows.push([`最後の衝突：ピストンに向かう速さ ${S("v")}<sub>x</sub> の大きさ`, `${f(a, 0)} → ${f(b, 0)} m/s`]);
+      rows.push([`${S("v")}${comp ? " ＋ 2" : " − 2"}${S("u")}（${comp ? "圧縮" : "膨張"}の式）`, `${f(a + sg*2*uu, 0)} m/s`]);
+      rows.push([`Δ${S("K")}（実測）`, `${sgn(toE(ev.dK))} ×10⁻²¹ J`]);
+      rows.push([`力積 × ${S("u")} ＝ 2${S("m")}(${S("v")} ${comp ? "＋" : "−"} ${S("u")})${S("u")}`, `${sgn(sg*toE(2*(ev.vin + sg*fromV(uu))*fromV(uu)))} ×10⁻²¹ J`]);
+    }
+    ctx.ro(table(rows));
+    ctx.eqs(`<p class="eq">ピストンは動いているので、分子の速さは「ピストンから見た速さ」が反転する形で変わる：<b>圧縮</b> ${S("v")}′ ＝ ${S("v")} ＋ 2${S("u")}、<b>膨張</b> ${S("v")}′ ＝ ${S("v")} − 2${S("u")}（${S("v")}：ピストンに向かう速さ）。</p><p class="eq">運動エネルギーの変化は Δ${S("K")} ＝ ½${S("m")}(${S("v")}′² − ${S("v")}²) ＝ ±2${S("m")}${S("u")}(${S("v")} ± ${S("u")})。これは、ピストンが分子に与えた力積 2${S("m")}(${S("v")} ± ${S("u")}) と、ピストンが動いた距離（${S("u")}×衝突の時間）の積、つまり<b>ピストンが分子にした仕事</b>に等しい。</p><p class="eq">実際のピストンの速さは分子よりずっと遅く、1回の変化はごくわずか。それが膨大な回数積み重なって気体の温度が変わる。ここでは見やすいように速く動かしている。</p>`);
+  },
+  asks:[
+    ["圧縮で再生しよう。衝突のたびに分子の速さ（x成分）は何 m/s ずつ増えるか。ピストンの速さ u と比べよう。", "2u ずつ増える（v′ ＝ v ＋ 2u）。表の「v ＋ 2u」と実測が一致する。"],
+    ["膨張にしよう。分子の K はどうなるか。このエネルギーはどこへ行ったか。", "減る（v′ ＝ v − 2u）。分子がピストンを押して仕事をした分、運動エネルギーが減った。"],
+    ["圧縮で u を 2 倍にすると、1回の衝突の ΔK はおよそ何倍か。", "2u(v＋u) なので、u が v より小さければほぼ 2 倍（u も増えるぶん少し大きい）。"],
+    ["膨張で u を大きくして、分子の速さより速くしよう。何が起こるか。", "ピストンが分子から逃げるので追いつけず、衝突しない（K は変わらない）。"]
+  ]
+};
+
 /* ---------- p-V 図と状態変化（1 mol とは限らない、p₁V₁ ＝ nRT₁） ---------- */
 const PROC = {v:"定積変化", p:"定圧変化", T:"等温変化", a:"断熱変化"};
 function pvPath(P){
@@ -228,7 +396,7 @@ const cycle = {
   ]
 };
 
-LAB.app({title:"気体分子ラボ", modes:{kinetic, pv, cycle}});
+LAB.app({title:"気体分子ラボ", modes:{kinetic, wall, piston, pv, cycle}});
 })();
 </script>
 </body>

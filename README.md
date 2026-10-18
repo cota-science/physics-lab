@@ -35,7 +35,7 @@ anim/             シミュレーター
   circular.html   円運動ラボ（#uniform 等速円運動のベクトル／#conical 円すい振り子と遠心力／#vertical 鉛直面内の円運動／#train 電車の中のおもり。motion ＝ acc・const・dec、obj ＝ pend・rest・cut・spring、view ＝ train・ground）
   shm.html        単振動ラボ（#circle 円運動の影／#spring ばね振り子とエネルギー／#pendulum 大きな振れ角の単振り子／#buoy 浮力と重力の単振動（水に浮かぶ物体））
   gravitation.html 万有引力ラボ（#orbit 人工衛星の軌道と面積速度／#kepler ケプラーの第3法則／#escape 打ち上げと第2宇宙速度／#transfer 軌道の変更（人工衛星・探査機のホーマン遷移））
-  gas.html        気体分子ラボ（#kinetic 分子の運動と圧力／#pv p-V 図と状態変化／#cycle 熱機関のサイクル）
+  gas.html        気体分子ラボ（#kinetic 分子の運動と圧力／#wall 壁との衝突（加熱・冷却）／#piston ピストンとの衝突（圧縮・膨張）／#pv p-V 図と状態変化／#cycle 熱機関のサイクル）
 ```
 
 ## 単元のつくり
@@ -73,6 +73,7 @@ URL の `#` 以降で、モードと値を指定して開けます。問題文�
 - `anim/gravitation.html#orbit&body=moon`（body は earth／moon／venus／mars／jupiter／sun。#orbit・#escape・#transfer で使える）
 - `anim/gravitation.html#transfer&ex=mars&r1=1&r2=1.524`（ex は leo／geo／mars／venus、b2=off で到着点の噴射なし）
 - `anim/gas.html#pv&proc=p&p1=1&V1=24.9&V2=33.2`（proc ＝ v 定積・p 定圧・T 等温・a 断熱）
+- `anim/gas.html#wall&Tg=300&Tw=900`（壁との衝突）、`anim/gas.html#piston&dir=e&u=15`（dir ＝ c 圧縮・e 膨張）
 
 ## 文字の表記（イタリックとレギュラー）
 - **物理量の文字はイタリック**（*m, a, g, T, θ, mg, ma* …）、ベクトルは太字イタリック（円運動ラボの電車のモードでは文字の上に →）。
