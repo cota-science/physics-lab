@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
 <style>
-/* Layout: step-by-step worksheet. Wide stage: cylinder (with stoppers, weight, heater) | p-V graph | T-V graph (phone: cylinder + p-V on row 1, readout + T-V on row 2). Under it: step chips, step card with Next/Back, energy table filling row by row, then efficiency panel (unlocked after one cycle), questions. */
+/* Layout: step-by-step worksheet. Wide stage: cylinder (with stoppers, weight, heater) | p-V graph | V-T graph (phone: cylinder + p-V on row 1, readout + T-V on row 2). Under it: step chips, step card with Next/Back, energy table filling row by row, then efficiency panel (unlocked after one cycle), questions. */
 :root{
   --paper:#FAFBF7; --grid:#E4EBF1; --ink:#1C2430; --muted:#5B6675;
   --blue:#2447B3; --blue-soft:#E7EDFB; --red:#CF2A2A; --red-soft:#FCECEA;
@@ -373,23 +373,23 @@ function drawPVR(st){
   if(done){ const wn = Math.round((S.p2 - P1) * (S.V2 - V1) * 100); TB(`正味の仕事 ${wn} J`, (x1 + x2) / 2, (yp1 + yp2) / 2, col.net, fs + 1, "center"); TB(`打ち消し合う部分`, (x1 + x2) / 2, (yp1 + y0) / 2, col.muted, fs, "center"); }
 }
 function drawTV(st){ return CAR() ? drawTVc(st) : drawTVR(st); }
-function drawTVR(st){
+function drawTVR(st){   // V-T 図：横軸が温度 T、縦軸が体積 V
   const ax = axes(), g = LY.tv, tstep = ax.Tmax > 1800 ? 600 : 300;
   const ticks = []; for(let v = tstep; v <= ax.Tmax; v += tstep) ticks.push(v);
-  const { X, Y } = graphFrame(g, ax.Vmax, ax.Tmax, ax.Vmax > 3 ? [1, 2, 3] : [0.5, 1, 1.5, 2, 2.5].filter(v => v <= ax.Vmax), ticks, "体積 V〔L〕", "温度 T〔K〕");
-  // 定圧の直線（原点を通る）
-  [[P1, "p₁"], [S.p2, "p₂"]].forEach(([p, lab]) => { const Vend = Math.min(ax.Vmax, ax.Tmax / TofPV(p, 1)); L([[X(0), Y(0)], [X(Vend), Y(TofPV(p, Vend))]], col.line, 1.4, [6, 4]);
-    TI(LY.wide ? `p ＝ ${lab} の直線` : `p ＝ ${lab}`, X(Vend) - 4, Y(TofPV(p, Vend)) + 12, col.muted, 12, "right"); });
+  const { X, Y } = graphFrame(g, ax.Tmax, ax.Vmax, ticks, ax.Vmax > 3 ? [1, 2, 3] : [0.5, 1, 1.5, 2, 2.5].filter(v => v <= ax.Vmax), "温度 T〔K〕", "体積 V〔L〕");
+  // 定圧の直線（原点を通る）：V ＝ T/(300p)
+  [[P1, "p₁"], [S.p2, "p₂"]].forEach(([p, lab]) => { const Tend = Math.min(ax.Tmax, TofPV(p, ax.Vmax)), Vend = Tend / TofPV(p, 1); L([[X(0), Y(0)], [X(Tend), Y(Vend)]], col.line, 1.4, [6, 4]);
+    if(LY.wide) TI(`p ＝ ${lab} の直線`, X(Tend) - 4, Y(Vend) + 12, col.muted, 12, "right"); });
   for(let k = 1; k <= 5; k++){
     if(k === 3) continue;
-    const f = s2 => [X(s2.V), Y(TofPV(s2.p, s2.V))];
+    const f = s2 => [X(TofPV(s2.p, s2.V)), Y(s2.V)];
     if(S.step < k){ L(pathPts(k, 1, f), col.line, 1.5, [4, 4]); continue; }
     const s = S.step === k ? S.s : 1; L(pathPts(k, s, f), segColor(k), 3.2);
     if(s > .55){ const a = stateAt(k, .5), b = stateAt(k, .56); arrow(...f(a), ...f(b), segColor(k), 3); }
   }
-  Object.entries(pts()).forEach(([n, [v, p]]) => { const t = TofPV(p, v); ctx.save(); ctx.fillStyle = col.ink; ctx.beginPath(); ctx.arc(X(v), Y(t), 3.5, 0, TAU); ctx.fill(); ctx.restore();
-    const right = v === V1 || !LY.wide; TB(`${n}（${Math.round(t)} K）`, X(v) + (right ? -8 : 8), Y(t) + (n === "A" || n === "D" ? 12 : -12), col.ink, LY.wide ? 12 : 11, right ? "right" : "left"); });
-  ctx.save(); ctx.fillStyle = col.red; ctx.strokeStyle = col.sheet; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(X(st.V), Y(TofPV(st.p, st.V)), 6.5, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
+  Object.entries(pts()).forEach(([n, [v, p]]) => { const t = TofPV(p, v); ctx.save(); ctx.fillStyle = col.ink; ctx.beginPath(); ctx.arc(X(t), Y(v), 3.5, 0, TAU); ctx.fill(); ctx.restore();
+    const pos = { A: [-8, 13, "right"], B: [8, 13, "left"], C: [-8, -13, "right"], D: [-8, -13, "right"] }[n]; TB(LY.wide ? `${n}（${Math.round(t)} K）` : n, X(t) + pos[0], Y(v) + pos[1], col.ink, LY.wide ? 12 : 11, pos[2]); });
+  ctx.save(); ctx.fillStyle = col.red; ctx.strokeStyle = col.sheet; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(X(TofPV(st.p, st.V)), Y(st.V), 6.5, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
 }
 function drawInfo(st){
   const f = LY.info; let y = f.y;
@@ -518,20 +518,20 @@ function drawPVc(st){
   if(!done && S.step >= 3){ const w2 = carEnergy(3, S.step === 3 ? S.s : 1).W + (S.step >= 4 ? carEnergy(4, S.step === 4 ? S.s : 1).W : 0); const c2 = cen(co); TB(`された仕事 ${w2.toFixed(0)} J`, X(c2[0]), Y(c2[1] / 3), col.cool, fs, "center"); }
   if(done){ const poly = carTrace([1, 2, 3, 4]), c3 = cen(poly), wn = -(carEnergy(1, 1).W + carEnergy(2, 1).W + carEnergy(3, 1).W + carEnergy(4, 1).W); TB(`正味の仕事 ${wn.toFixed(1)} J`, X(c3[0]), Y(c3[1]), col.net, fs + 1, "center"); }
 }
-function drawTVc(st){
+function drawTVc(st){   // V-T 図：横軸が温度 T、縦軸が体積 V
   const ax = axes(), g = LY.tv, tstep = ax.Tmax > 1800 ? 600 : 300, ticks = []; for(let v = tstep; v <= ax.Tmax; v += tstep) ticks.push(v);
-  const { X, Y } = graphFrame(g, ax.Vmax, ax.Tmax, tl(ax.Vmax), ticks, "体積 V〔L〕", "温度 T〔K〕");
-  [S.TH, TL].forEach(t => L([[X(0), Y(t)], [X(ax.Vmax), Y(t)]], col.line, 1.4, [6, 4]));
+  const { X, Y } = graphFrame(g, ax.Tmax, ax.Vmax, ticks, tl(ax.Vmax), "温度 T〔K〕", "体積 V〔L〕");
+  [S.TH, TL].forEach(t => L([[X(t), Y(0)], [X(t), Y(ax.Vmax)]], col.line, 1.4, [6, 4]));
   for(let k = 1; k <= 4; k++){
-    const f = s2 => [X(s2.V), Y(TofPV(s2.p, s2.V))];
+    const f = s2 => [X(TofPV(s2.p, s2.V)), Y(s2.V)];
     if(S.step < k){ L(pathPts(k, 1, f), col.line, 1.5, [4, 4]); continue; }
     const s = S.step === k ? S.s : 1; L(pathPts(k, s, f), segColor(k), 3.2);
     if(s > .55){ const a = carState(k, .5), b = carState(k, .56); arrow(...f(a), ...f(b), segColor(k), 3); }
   }
-  Object.entries(pts()).forEach(([n, [v, p]]) => { const t = TofPV(p, v); ctx.save(); ctx.fillStyle = col.ink; ctx.beginPath(); ctx.arc(X(v), Y(t), 3.5, 0, TAU); ctx.fill(); ctx.restore();
-    const wide = g.w >= 260, left = n === "A" || n === "D", y = Y(t) + (t > 300 ? -12 : 13);
-    wide ? TB(`${n}（${Math.round(t)} K）`, X(v) + (left ? 6 : -6), y, col.ink, 12, left ? "right" : "left") : T(n, X(v) + (left ? -9 : 9), y, col.ink, 14, "center", true); });
-  ctx.save(); ctx.fillStyle = col.red; ctx.strokeStyle = col.sheet; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(X(st.V), Y(TofPV(st.p, st.V)), 6.5, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
+  Object.entries(pts()).forEach(([n, [v, p]]) => { const t = TofPV(p, v); ctx.save(); ctx.fillStyle = col.ink; ctx.beginPath(); ctx.arc(X(t), Y(v), 3.5, 0, TAU); ctx.fill(); ctx.restore();
+    const wide = g.w >= 260, hot = t > 300, dx = hot ? 8 : -8, y = Y(v) + (n === "A" || n === "D" ? 12 : -12);
+    wide ? TB(`${n}（${Math.round(t)} K）`, X(t) + dx, y, col.ink, 12, hot ? "left" : "right") : T(n, X(t) + (hot ? 9 : -9), y, col.ink, 14, "center", true); });
+  ctx.save(); ctx.fillStyle = col.red; ctx.strokeStyle = col.sheet; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(X(TofPV(st.p, st.V)), Y(st.V), 6.5, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
 }
 function carText(){
   const g = cg(), TH = S.TH, r = S.r, e1 = carEnergy(1, 1), e2 = carEnergy(2, 1), e3 = carEnergy(3, 1), e4 = carEnergy(4, 1);
@@ -629,7 +629,7 @@ const QS = { r: [
   ["A→B と C→D で、ピストンが動かないのはなぜか。", "A→B では、気体の圧力がおもりを押し上げるのに必要な圧力 p₂ に達するまで、ピストンは下のストッパーに乗ったままだからです。C→D では、気体の圧力が p₁ に下がるまで、ピストンが上のストッパーに押しつけられているからです。どちらも体積が一定なので、仕事は 0 です。"],
   ["B→C で吸収した熱量は、何に使われたか。", "一部は内部エネルギーの増加（温度上昇）に、残りは気体が外部にした仕事に使われました（Q ＝ ΔU ＋ W′）。だから、同じだけ温度を上げるのに、定積変化より多くの熱が必要です。"],
   ["p-V グラフで、BC の下の面積と DA の下の面積を比べよう。正味の仕事が正になるのはなぜか。", "膨張（B→C）は高い圧力 p₂ で、圧縮（D→A）は低い圧力 p₁ で行うので、した仕事のほうがされた仕事より大きくなります。差は、グラフが囲む長方形の面積です。同じ圧力で膨張と圧縮をくり返すと、囲む面積は 0 で、仕事は取り出せません。"],
-  ["T-V グラフで、B→C と D→A はどんな線になっているか。", "原点を通る直線の一部です。圧力が一定のとき、体積は絶対温度に比例します（物理で学ぶシャルルの法則）。直線の傾きが大きいほど、圧力が小さいことを表します。"],
+  ["V-T グラフで、B→C と D→A はどんな線になっているか。", "原点を通る直線の一部です。圧力が一定のとき、体積は絶対温度に比例します（物理で学ぶシャルルの法則）。直線の傾きが大きいほど、圧力が小さいことを表します。"],
   ["1サイクルの合計で、ΔU はいくらか。Q の合計と W′ の関係は？", "ΔU ＝ 0 です。もとの状態に戻ったからです。熱力学第一法則から、Q の合計（Qin − Qout）は、外部にした正味の仕事 W′ に等しくなります。"],
   ["熱効率の分母を「Qin − Qout」にしてはいけないのはなぜか。", "1サイクルでは Qin − Qout ＝ W′ がいつも成り立つので、熱効率がどんな熱機関でも 1 になってしまいます。熱効率は「受け取った熱量（燃料などで加えた熱量）のうち、どれだけを仕事にできたか」を表すので、分母は受け取った熱量 Qin だけです。"],
   ["p₂ や V₂ を変えて、熱効率を比べよう。どうすると熱効率が大きくなるか。", "このサイクルでは、p₂ を大きくしても（高い圧力で膨張させる）、V₂ を大きくしても（大きく膨張させる）熱効率は大きくなります。ただし、吸収する熱量も増えるので熱効率の伸びには限りがあり、どの場合も e ＜ 1 です。たとえば p₂ ＝ 2.0×10⁵ Pa、V₂ ＝ 2.0 L で約 15%、p₂ ＝ 3.0×10⁵ Pa にすると約 19% です。"],

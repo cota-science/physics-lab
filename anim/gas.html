@@ -268,6 +268,164 @@ const piston = {
   ]
 };
 
+/* ---------- 等温変化：温度が違うと p-V 曲線の位置が変わる（面積 pV ＝ nRT） ---------- */
+function gaxes(c, box, xmax, ymax, xlab, ylab, ink2, ink3, xs, ys){
+  const X = v => box.x + v/xmax*box.w, Y = v => box.y + box.h - v/ymax*box.h;
+  c.strokeStyle = ink2; c.lineWidth = 1.4; c.beginPath(); c.moveTo(X(0), Y(ymax)); c.lineTo(X(0), Y(0)); c.lineTo(X(xmax), Y(0)); c.stroke();
+  label(c, ylab, X(0) + 4, Y(ymax) + 6, ink3, "left", uiFont(11)); label(c, xlab, X(xmax), Y(0) + 27, ink3, "right", uiFont(11));
+  const sx = xs || LAB.niceStep(xmax, 5), sy = ys || LAB.niceStep(ymax, 4);
+  c.font = numFont(10); c.fillStyle = ink3; c.textAlign = "center"; c.textBaseline = "alphabetic";
+  for(let v = sx; v < xmax; v += sx) c.fillText(f(v, sx < 1 ? 1 : 0), X(v), Y(0) + 12);
+  c.textAlign = "right"; for(let q = sy; q < ymax; q += sy) c.fillText(f(q, sy < 1 ? 1 : 0), X(0) - 3, Y(q) + 3);
+  return {X, Y};
+}
+const pOf = (n, T, V) => n*Rg*T/(V*100);        // ×10⁵ Pa（V：×10⁻³ m³ ＝ L）
+const vOf = (n, p, T) => n*Rg*T/(p*100);         // L
+const niceCeil = x => { const st = x > 20 ? 5 : x > 8 ? 2 : x > 3 ? 1 : 0.5; return Math.ceil(x/st)*st; };
+function curve(c, fn, x0, x1, ymax, X, Y, N){    // fn(x) が ymax を超える部分は描かない
+  let on = false; c.beginPath();
+  for(let i = 0; i <= N; i++){ const x = x0 + (x1 - x0)*i/N, y = fn(x); if(!(y <= ymax) || !isFinite(y)){ on = false; continue; } on ? c.lineTo(X(x), Y(y)) : c.moveTo(X(x), Y(y)); on = true; }
+  c.stroke();
+}
+/* ---------- 縦型シリンダーと分子（ボイルの法則・シャルルの法則で共通） ---------- */
+function partsInit(St, seed, N){ const r = rng(seed); St.ps = Array.from({length:N}, () => { const a = r()*2*Math.PI; return {x:r(), y:r(), dx:Math.cos(a), dy:Math.sin(a)}; }); St.hits = []; }
+function partsStep(St, dt, t, sp, H){   // sp：速さ（シリンダーの幅 ＝ 1 として毎秒）、H：気体の高さ（幅との比）
+  St.ps.forEach(q => { q.x += q.dx*sp*dt; q.y += q.dy*sp*dt/H;
+    if(q.x < 0){ q.x = -q.x; q.dx = Math.abs(q.dx); } if(q.x > 1){ q.x = 2 - q.x; q.dx = -Math.abs(q.dx); }
+    if(q.y < 0){ q.y = -q.y; q.dy = Math.abs(q.dy); } if(q.y > 1){ q.y = 2 - q.y; q.dy = -Math.abs(q.dy); St.hits.push(t); } });
+  while(St.hits.length && St.hits[0] < t - 2) St.hits.shift();
+}
+const hitRate = (St, t) => t > 0.3 ? St.hits.length/Math.min(2, t) : 0;
+function vcyl(c, o){   // o：x, y, w, h（シリンダーの外形）、frac（気体の高さ ÷ h）、tK、ps、bath、weight、heat、push
+  const ink2 = css("--ink2"), bot = o.y + o.h, top = bot - o.h*o.frac, x = o.x, w = o.w;
+  if(o.bath){ c.fillStyle = heat(o.tK); c.globalAlpha = 0.16; c.fillRect(x - 10, o.y + o.h*0.1, w + 20, o.h*0.9 + 10); c.globalAlpha = 1; }
+  c.fillStyle = heat(o.tK); c.globalAlpha = 0.3; c.fillRect(x, top, w, bot - top); c.globalAlpha = 1;
+  c.fillStyle = css("--ink"); c.globalAlpha = 0.75; o.ps.forEach(q => { c.beginPath(); c.arc(x + 4 + q.x*(w - 8), bot - 4 - q.y*Math.max(1, bot - top - 8), 2.5, 0, 7); c.fill(); }); c.globalAlpha = 1;
+  c.strokeStyle = ink2; c.lineWidth = 2.5; c.beginPath(); c.moveTo(x, o.y); c.lineTo(x, bot); c.lineTo(x + w, bot); c.lineTo(x + w, o.y); c.stroke();
+  c.fillStyle = ink2; c.fillRect(x + 2, top - 9, w - 4, 9);
+  if(o.weight){ const ww = w*0.64, wh = 8 + o.weight*9; c.fillStyle = css("--ink3"); c.fillRect(x + (w - ww)/2, top - 9 - wh, ww, wh); if(wh > 14) label(c, "おもり", x + w/2, top - 9 - wh/2, css("--surface"), "center", uiFont(10, true)); }
+  else { c.fillStyle = ink2; c.fillRect(x + w/2 - 3, o.y - 16, 6, top - 9 - (o.y - 16)); }
+  if(o.push){ const dn = o.push < 0; arrow(c, x + w + 13, dn ? top - 30 : top - 2, x + w + 13, dn ? top - 2 : top - 30, css("--acc"), 2.6); label(c, dn ? "押す" : "引く", x + w + 20, top - 16, css("--acc"), "left", uiFont(11, true)); }
+  if(o.heat){ const cc = o.heat > 0 ? css("--neg") : css("--pos"); for(let k = 1; k <= 3; k++){ const xx = x + w*k/4; o.heat > 0 ? arrow(c, xx, bot + 20, xx, bot + 3, cc, 2.4) : arrow(c, xx, bot + 3, xx, bot + 20, cc, 2.4); } label(c, o.heat > 0 ? "加熱" : "冷却", x + w/2, bot + 30, cc, "center", uiFont(11, true)); }
+  return {top, bot};
+}
+/* 図の割りつけ：PC は シリンダー｜グラフ、スマホは 上にシリンダーと数値、下にグラフ */
+function gasLayout(ctx, w){
+  const wide = w > 520, want = wide ? "4/3" : "3/4";
+  if(ctx.stage.style.aspectRatio !== want){ ctx.stage.style.aspectRatio = want; requestAnimationFrame(() => window.dispatchEvent(new Event("resize"))); }
+  return wide;
+}
+function cylLayout(w, h, wide){
+  if(wide){ const cw = Math.min(110, w*0.16), cyl = {x:28, y:58, w:cw, h:h - 165}, gx = cyl.x + cw + 96; return {wide, cyl, box:{x:gx, y:22, w:w - gx - 56, h:h - 74}, txt:{x:12, y:h - 52}}; }
+  const cyl = {x:22, y:40, w:62, h:h*0.3}, by = cyl.y + cyl.h + 48;
+  return {wide, cyl, box:{x:46, y:by, w:w - 92, h:h - by - 52}, txt:{x:cyl.x + cyl.w + 54, y:46}};
+}
+function readout(c, L, rows){ rows.forEach((r, i) => label(c, r[0], L.txt.x, L.txt.y + i*18, r[1] || css("--ink"), "left", uiFont(L.wide ? 12 : 13, true))); }
+
+/* ---------- ボイルの法則（等温変化）：温度が違うと p-V 曲線の位置が変わる（面積 pV ＝ nRT） ---------- */
+const VMID = 31, VAMP = 19, VPER = 10;
+const isoV = t => VMID + VAMP*Math.sin(2*Math.PI*t/VPER);
+const iso = {
+  label:"ボイルの法則（等温変化）",
+  params:[["n","物質量 "+S("n"),0.5,2,0.1,"mol",1,1],["T","温度 "+S("T")+"（一定）",100,900,10,"K",0,300]],
+  toggles:[["rect","p × V の長方形を表示",true],["ref","300 K のときと比べる",true],["fam","ほかの温度の等温線",true]],
+  timed:true, graphs:1, wide:[0], aspect:"4/3", dt:1/120,
+  legend:`<span><i style="background:var(--hl2)"></i>長方形の面積 ＝ ${S("p")}${S("V")} ＝ ${S("n")}${S("R")}${S("T")}</span><span><i style="background:var(--ghost)"></i>300 K のとき</span><span><i style="background:var(--acc)"></i>ピストンを動かす向き</span>`,
+  reset(P, St){ partsInit(St, 4321, 48); },
+  duration(){ return 2*VPER; },
+  step(P, St, dt, t){ partsStep(St, dt, t + dt, Math.sqrt(P.T/300), isoV(t + dt)/25); },
+  draw(ctx){
+    const {P, S:St, T:Tg, t} = ctx; const {c, w, h} = prep(ctx.stage), Lw = gasLayout(ctx, w), L = cylLayout(w, h, Lw);
+    const ink2 = css("--ink2"), ink3 = css("--ink3"), n = P.n, T = P.T, V = isoV(t), p = pOf(n, T, V), J = p*V*100, dV = Math.cos(2*Math.PI*t/VPER);
+    const vmax = 70, pmax = niceCeil(pOf(n, 900, 20)), box = L.box, ax = gaxes(c, box, vmax, pmax, "V〔×10⁻³ m³〕", "p〔×10⁵ Pa〕", ink2, ink3);
+    // シリンダー（恒温槽の中で、ピストンをゆっくり動かす）
+    vcyl(c, {x:L.cyl.x, y:L.cyl.y, w:L.cyl.w, h:L.cyl.h, frac:V/vmax, tK:T, ps:St.ps, bath:true, push:t < ctx.dur - 1e-6 ? (dV > 0.05 ? 1 : dV < -0.05 ? -1 : 0) : 0});
+    label(c, `恒温槽 ${T} K`, L.cyl.x + L.cyl.w/2, L.cyl.y + L.cyl.h + 22, heat(T), "center", uiFont(11, true));
+    readout(c, L, [[`p ＝ ${f(p, 2)}×10⁵ Pa`], [`V ＝ ${f(V, 1)}×10⁻³ m³`], [`pV ＝ ${f(J, 0)} J`, css("--hl2")]]);
+    if(Tg.fam){ for(let TT = 100; TT <= 900; TT += 100){ if(TT === T) continue; c.strokeStyle = heat(TT); c.globalAlpha = 0.35; c.lineWidth = 1.6; curve(c, v => pOf(n, TT, v), 3, vmax, pmax, ax.X, ax.Y, 160); c.globalAlpha = 1;
+      if(L.wide || TT % 300 === 0) label(c, `${TT} K`, ax.X(vmax) + 2, ax.Y(pOf(n, TT, vmax*0.97)), heat(TT), "left", numFont(10)); } }
+    if(Tg.ref && T !== 300){ const pr = pOf(n, 300, V); c.strokeStyle = css("--ghost"); c.lineWidth = 2; c.setLineDash([5, 4]); curve(c, v => pOf(n, 300, v), 3, vmax, pmax, ax.X, ax.Y, 160); if(pr <= pmax) c.strokeRect(ax.X(0), ax.Y(pr), ax.X(V) - ax.X(0), ax.Y(0) - ax.Y(pr)); c.setLineDash([]); if(pr <= pmax) label(c, `300 K：${f(n*Rg*300, 0)} J`, ax.X(V) - 4, ax.Y(pr) + (pr < p ? 12 : -8), css("--ghost"), "right", numFont(10)); }
+    if(Tg.rect){ const p0 = pOf(n, T, VMID); if(p0 <= pmax){ c.strokeStyle = css("--hl2"); c.globalAlpha = 0.5; c.lineWidth = 1.4; c.setLineDash([2, 3]); c.strokeRect(ax.X(0), ax.Y(p0), ax.X(VMID) - ax.X(0), ax.Y(0) - ax.Y(p0)); c.setLineDash([]); c.globalAlpha = 1; }
+      if(p <= pmax){ c.fillStyle = heat(T); c.globalAlpha = 0.22; c.fillRect(ax.X(0), ax.Y(p), ax.X(V) - ax.X(0), ax.Y(0) - ax.Y(p)); c.globalAlpha = 1; c.strokeStyle = css("--hl2"); c.lineWidth = 2; c.strokeRect(ax.X(0), ax.Y(p), ax.X(V) - ax.X(0), ax.Y(0) - ax.Y(p));
+        label(c, `面積 pV ＝ ${f(J, 0)} J`, ax.X(0) + 8, Math.max(ax.Y(p) + 14, box.y + 12), css("--hl2"), "left", uiFont(L.wide ? 14 : 12, true)); } }
+    c.strokeStyle = heat(T); c.lineWidth = 3.4; curve(c, v => pOf(n, T, v), 3, vmax, pmax, ax.X, ax.Y, 200);
+    if(p <= pmax) disc(c, ax.X(V), ax.Y(p), 6.5, heat(T), css("--surface"));
+    label(c, `${T} K`, ax.X(vmax) + 2, ax.Y(pOf(n, T, vmax*0.97)), heat(T), "left", uiFont(12, true));
+    // 補助のグラフ：pV ＝ nRT（温度に比例）
+    const {c:g, w:gw, h:gh} = prep(ctx.graphs[0]), Jmax = niceCeil(n*Rg*900/1000)*1000, gb = {x:54, y:26, w:gw - 76, h:gh - 66}, gx = gaxes(g, gb, 900, Jmax, "T〔K〕", "pV〔J〕", ink2, ink3, 100, Jmax/4);
+    g.font = uiFont(12); g.fillStyle = ink2; g.textBaseline = "middle"; g.textAlign = "left"; g.fillText("長方形の面積 pV ＝ nRT は、温度 T に比例する", 8, 10);
+    const grad = g.createLinearGradient(gx.X(0), 0, gx.X(900), 0); grad.addColorStop(0, heat(100)); grad.addColorStop(1, heat(900)); g.strokeStyle = grad; g.lineWidth = 3.5; g.beginPath(); g.moveTo(gx.X(0), gx.Y(0)); g.lineTo(gx.X(900), gx.Y(n*Rg*900)); g.stroke();
+    g.setLineDash([3, 4]); g.strokeStyle = ink3; g.lineWidth = 1.2; g.beginPath(); g.moveTo(gx.X(T), gx.Y(0)); g.lineTo(gx.X(T), gx.Y(J)); g.lineTo(gx.X(0), gx.Y(J)); g.stroke(); g.setLineDash([]);
+    disc(g, gx.X(300), gx.Y(n*Rg*300), 4.5, css("--ghost")); disc(g, gx.X(T), gx.Y(J), 6.5, heat(T), css("--surface"));
+    label(g, `傾き ＝ nR ＝ ${f(n*Rg, 1)} J/K`, gx.X(900) - 6, gx.Y(n*Rg*900) + 16, ink2, "right", uiFont(12, true));
+    const hr = hitRate(St, t);
+    ctx.banner(`温度 ${T} K のまま：V ＝ ${f(V,1)}×10⁻³ m³ のとき p ＝ ${f(p,2)}×10⁵ Pa、pV ＝ nRT ＝ ${f(J,0)} J（一定）`, "--ui");
+    ctx.ro(table([[`温度 ${S("T")}（一定）`, `${T} K`], [`体積 ${S("V")}`, `${f(V,1)} ×10⁻³ m³`], [`圧力 ${S("p")} ＝ ${S("n")}${S("R")}${S("T")}/${S("V")}`, `${f(p,3)} ×10⁵ Pa`], [`長方形の面積 ${S("p")}${S("V")}`, `${f(J,0)} J`], [`300 K のときの面積`, `${f(n*Rg*300,0)} J`], [`分子がピストンに当たる回数（毎秒、ゆらぎあり）`, `${f(hr, 0)} 回`]]));
+    ctx.eqs(`<p class="eq">恒温槽で温度を一定に保ち、ピストンをゆっくり動かす。体積が小さいほど分子がピストンに当たる回数が増え、圧力が大きくなる（温度一定なので1回の衝突の強さは同じ）。</p><p class="eq">等温線は ${S("p")}${S("V")} ＝ ${S("n")}${S("R")}${S("T")} ＝ 一定 の曲線。点が動くと長方形の形は変わるが、<b>面積は変わらない</b>（ボイルの法則。点線はスタートのときの長方形）。</p><p class="eq">温度を上げると、曲線は右上へ移り、長方形の面積も温度に比例して大きくなる（面積 ＝ ${S("n")}${S("R")}${S("T")}）。この長方形の面積は「状態の量 ${S("p")}${S("V")}」で、気体がする仕事（曲線の下の面積）とは別のもの。</p>`);
+  },
+  asks:[
+    ["再生して、長方形の形と面積を見よう。体積が半分になると、圧力と面積はどうなるか。", "圧力は 2 倍、面積は変わらない（pV ＝ nRT ＝ 一定）。"],
+    ["圧縮したとき、分子がピストンに当たる回数はどうなるか。それが圧力とどう関係するか。", "増える。温度一定なので1回の衝突の強さは同じで、回数が増えた分だけ圧力が大きくなる。"],
+    ["温度を 300 K から 600 K にしよう。曲線の位置と長方形の面積はどうなるか。", "曲線は右上に移り、面積は 2 倍になる（面積 ＝ nRT）。"],
+    ["物質量 n を 2 倍にして、300 K の面積を比べよう。", "2 倍。面積 ＝ nRT は物質量にも比例する。"],
+    ["長方形の面積 pV と、曲線の下の面積は何が違うか。", "長方形は状態で決まる pV ＝ nRT。曲線の下の面積は、変化の間に気体がした仕事。"]
+  ]
+};
+
+/* ---------- シャルルの法則（定圧変化）：圧力が違うと V-T 直線の傾きが変わる（傾き nR/p） ---------- */
+const TMID = 375, TAMP = 225, TPER = 12;
+const isobT = t => TMID - TAMP*Math.cos(2*Math.PI*t/TPER);
+const isobar = {
+  label:"シャルルの法則（定圧変化）",
+  params:[["n","物質量 "+S("n"),0.5,2,0.1,"mol",1,1],["p","圧力 "+S("p")+"（一定）",0.5,4,0.1,"×10⁵ Pa",1,1]],
+  toggles:[["tri","傾きの三角形（ΔT ＝ 100 K）を表示",true],["fam","ほかの圧力の直線",true],["cel","セルシウス温度の目盛り",true]],
+  timed:true, graphs:1, wide:[0], aspect:"4/3", dt:1/120,
+  legend:`<span><i style="background:var(--pos)"></i>この圧力の直線</span><span><i style="background:var(--hl2)"></i>傾きの三角形</span><span><i style="background:var(--neg)"></i>加熱</span>`,
+  reset(P, St){ partsInit(St, 8765, 48); },
+  duration(){ return 2*TPER; },
+  step(P, St, dt, t){ const T = isobT(t + dt); partsStep(St, dt, t + dt, Math.sqrt(T/300), vOf(P.n, P.p, T)/25); },
+  draw(ctx){
+    const {P, S:St, T:Tg, t} = ctx; const {c, w, h} = prep(ctx.stage), Lw = gasLayout(ctx, w), L = cylLayout(w, h, Lw);
+    const ink2 = css("--ink2"), ink3 = css("--ink3"), n = P.n, p = P.p, vmax = isoVmax(n), tmax = 650;
+    const T = isobT(t), V = vOf(n, p, T), slope = n*Rg/(p*100), dT = Math.sin(2*Math.PI*t/TPER);   // L/K
+    const box = L.box, ax = gaxes(c, box, tmax, vmax, "T〔K〕", "V〔×10⁻³ m³〕", ink2, ink3, 100);
+    vcyl(c, {x:L.cyl.x, y:L.cyl.y, w:L.cyl.w, h:L.cyl.h, frac:Math.min(1, V/vmax), tK:T, ps:St.ps, weight:p, heat:t < ctx.dur - 1e-6 ? (dT > 0.05 ? 1 : dT < -0.05 ? -1 : 0) : 0});
+    readout(c, L, [[`T ＝ ${f(T, 0)} K（${f(T - 273, 0)} ℃）`, heat(T)], [`V ＝ ${f(V, 1)}×10⁻³ m³`], [`p ＝ ${f(p, 1)}×10⁵ Pa（一定）`]]);
+    if(Tg.cel){ c.font = numFont(10); c.fillStyle = ink3; c.textAlign = "center"; c.textBaseline = "alphabetic";
+      [[0, "−273 ℃"], [273, "0 ℃"], [473, "200 ℃"]].forEach(([k, s2]) => { c.fillText(s2, ax.X(k), ax.Y(0) + 40); c.strokeStyle = ink3; c.lineWidth = 1; c.beginPath(); c.moveTo(ax.X(k), ax.Y(0)); c.lineTo(ax.X(k), ax.Y(0) + 4); c.stroke(); }); }
+    if(Tg.fam){ [0.5, 1, 2, 3, 4].forEach(pp => { if(Math.abs(pp - p) < 0.05) return; c.strokeStyle = css("--ghost"); c.globalAlpha = 0.6; c.lineWidth = 1.6; curve(c, tt => vOf(n, pp, tt), 0, tmax, vmax, ax.X, ax.Y, 60); c.globalAlpha = 1;
+      const tt = Math.min(tmax*0.96, vmax*0.9*pp*100/(n*Rg)); label(c, `p ＝ ${pp}`, ax.X(tt) + 4, ax.Y(vOf(n, pp, tt)) - 2, css("--ghost"), "left", numFont(10)); }); }
+    // この圧力の直線：0〜150 K は点線（理想気体として延長）、150〜600 K は実線
+    c.strokeStyle = css("--pos"); c.lineWidth = 2; c.setLineDash([4, 4]); curve(c, tt => vOf(n, p, tt), 0, 150, vmax, ax.X, ax.Y, 10); c.setLineDash([]);
+    c.lineWidth = 3.4; curve(c, tt => vOf(n, p, tt), 150, tmax, vmax, ax.X, ax.Y, 60);
+    const tl2 = Math.min(tmax*0.96, vmax*0.88*p*100/(n*Rg)); label(c, `p ＝ ${f(p,1)}`, ax.X(tl2) - 6, ax.Y(vOf(n, p, tl2)) + 14, css("--pos"), "right", uiFont(13, true));
+    if(V <= vmax){ c.setLineDash([3, 4]); c.strokeStyle = ink3; c.lineWidth = 1.2; c.beginPath(); c.moveTo(ax.X(T), ax.Y(0)); c.lineTo(ax.X(T), ax.Y(V)); c.lineTo(ax.X(0), ax.Y(V)); c.stroke(); c.setLineDash([]); }
+    if(Tg.tri){ const t0 = 300, v0 = vOf(n, p, t0), v1 = vOf(n, p, t0 + 100), hl2 = css("--hl2");
+      if(v1 <= vmax){ c.strokeStyle = hl2; c.lineWidth = 2.2; c.beginPath(); c.moveTo(ax.X(t0), ax.Y(v0)); c.lineTo(ax.X(t0 + 100), ax.Y(v0)); c.lineTo(ax.X(t0 + 100), ax.Y(v1)); c.stroke();
+        label(c, "ΔT ＝ 100 K", ax.X(t0 + 50), ax.Y(v0) + 13, hl2, "center", uiFont(11, true)); label(c, `ΔV ＝ ${f(v1 - v0, 1)}`, ax.X(t0 + 100) + 5, (ax.Y(v0) + ax.Y(v1))/2, hl2, "left", uiFont(11, true)); } }
+    if(V <= vmax) disc(c, ax.X(T), ax.Y(V), 6.5, heat(T), css("--surface"));
+    label(c, `傾き ＝ nR/p ＝ ${f(slope, 3)}×10⁻³ m³/K`, box.x + box.w, box.y - 8, css("--hl2"), "right", uiFont(L.wide ? 12 : 11, true));
+    // 補助のグラフ：p-V 図（同じ圧力のまま体積が増える）
+    const {c:g, w:gw, h:gh} = prep(ctx.graphs[0]), gb = {x:46, y:26, w:gw - 70, h:gh - 66}, gx = gaxes(g, gb, vmax, 4.5, "V〔×10⁻³ m³〕", "p〔×10⁵ Pa〕", ink2, ink3, undefined, 1);
+    g.font = uiFont(12); g.fillStyle = ink2; g.textBaseline = "middle"; g.textAlign = "left"; g.fillText("同じ変化を p-V 図で見ると：圧力は一定で、体積だけが変わる", 8, 10);
+    [0.5, 1, 2, 3, 4].forEach(pp => { if(Math.abs(pp - p) < 0.05) return; g.strokeStyle = css("--ghost"); g.globalAlpha = 0.5; g.lineWidth = 1.4; g.beginPath(); g.moveTo(gx.X(0), gx.Y(pp)); g.lineTo(gx.X(vmax), gx.Y(pp)); g.stroke(); g.globalAlpha = 1; });
+    const va = vOf(n, p, 150), vb = Math.min(vmax, vOf(n, p, 600)); g.strokeStyle = css("--pos"); g.globalAlpha = 0.35; g.lineWidth = 3.4; g.beginPath(); g.moveTo(gx.X(va), gx.Y(p)); g.lineTo(gx.X(vb), gx.Y(p)); g.stroke(); g.globalAlpha = 1;
+    if(V <= vmax) disc(g, gx.X(V), gx.Y(p), 6.5, heat(T), css("--surface"));
+    const hr = hitRate(St, t);
+    ctx.banner(`圧力 ${f(p,1)}×10⁵ Pa のまま：T ＝ ${f(T,0)} K で V ＝ ${f(V,1)}×10⁻³ m³、V/T ＝ nR/p ＝ ${f(slope,3)}×10⁻³ m³/K（一定）`, "--ui");
+    ctx.ro(table([[`圧力 ${S("p")}（一定）`, `${f(p,1)} ×10⁵ Pa`], [`温度 ${S("T")}`, `${f(T,0)} K（${f(T - 273,0)} ℃）`], [`体積 ${S("V")} ＝ (${S("n")}${S("R")}/${S("p")})${S("T")}`, `${f(V,2)} ×10⁻³ m³`], [`傾き ${S("V")}/${S("T")} ＝ ${S("n")}${S("R")}/${S("p")}`, `${f(slope,3)} ×10⁻³ m³/K`], [`${S("p")} ＝ 1.0×10⁵ Pa のときの傾き`, `${f(n*Rg/100,3)} ×10⁻³ m³/K`], [`分子がピストンに当たる回数（毎秒、ゆらぎあり）`, `${f(hr, 0)} 回`]]));
+    ctx.eqs(`<p class="eq">おもりで圧力を一定に保ち、加熱・冷却する。温度が上がると分子が速くなり、ピストンを押し上げて体積が増える。体積が増えると当たる回数は減るが、1回の衝突が強くなるので、圧力は一定のまま。</p><p class="eq">定圧変化では ${S("V")} ＝ (${S("n")}${S("R")}/${S("p")})${S("T")}。V-T 図は<b>原点を通る直線</b>で、傾きは ${S("n")}${S("R")}/${S("p")}。圧力が<b>小さい</b>ほど傾きは<b>大きい</b>。圧力が 2 倍になると傾きは ½ 倍、物質量 ${S("n")} が 2 倍なら傾きは 2 倍。</p><p class="eq">直線を低温側に延ばすと、${S("T")} ＝ 0 K（−273 ℃）で ${S("V")} ＝ 0 になる（点線。実際の気体は途中で液体になるので、理想気体としての延長）。</p>`);
+  },
+  asks:[
+    ["再生して、温度と体積の関係を見よう。絶対温度が 2 倍になると、体積は何倍になるか。", "2 倍（V ∝ T）。"],
+    ["27 ℃ の気体を圧力一定で加熱した。体積が 2 倍になるのは何 ℃ のときか。", "327 ℃（300 K → 600 K）。54 ℃ ではない。セルシウス温度ではなく絶対温度に比例する。"],
+    ["圧力を 1.0 から 2.0 にしよう。V-T 直線の傾きは何倍になるか。", "½ 倍。傾き nR/p は圧力に反比例する。"],
+    ["温度を 100 K 上げたときの体積の増加 ΔV が最も大きいのは、圧力がいくらのときか。", "圧力が最も小さいとき（0.5×10⁵ Pa）。傾き nR/p が最大だから。"],
+    ["直線を低温側に延ばすと、どこを通るか。", "原点（T ＝ 0 K、つまり −273 ℃ で V ＝ 0）。絶対温度の 0 の考え方につながる。"]
+  ]
+};
+const isoVmax = n => niceCeil(vOf(n, 0.5, 620));
+
 /* ---------- p-V 図と状態変化（1 mol とは限らない、p₁V₁ ＝ nRT₁） ---------- */
 const PROC = {v:"定積変化", p:"定圧変化", T:"等温変化", a:"断熱変化"};
 function pvPath(P){
@@ -344,17 +502,17 @@ const pv = {
     if(Math.abs(D.Qh) > 1 && s < 1){ const qx = cyl.x + Math.min(40, (px - cyl.x)/2); arrow(c, qx, cyl.y + cyl.h + (qdir > 0 ? 34 : 4), qx, cyl.y + cyl.h + (qdir > 0 ? 4 : 34), neg, 3); label(c, qdir > 0 ? "熱を吸収" : "熱を放出", qx + 8, cyl.y + cyl.h + 22, neg, "left", uiFont(11, true)); }
     if(P.proc === "a") label(c, "断熱（熱の出入りなし）", cyl.x + 4, cyl.y + cyl.h + 20, neg, "left", uiFont(11, true));
     if(Math.abs(D.Wp) > 1 && s < 1){ arrow(c, px + 34, cyl.y + cyl.h/2, px + 34 + wdir*28, cyl.y + cyl.h/2, acc, 3); label(c, wdir > 0 ? "外に仕事" : "仕事をされる", px + 34, cyl.y + cyl.h/2 - 14, acc, "left", uiFont(11, true)); }
-    // T-V 図
+    // V-T 図（横軸が温度 T、縦軸が体積 V）
     { const {c:g, w:gw, h:gh} = prep(ctx.graphs[0]), Tof = q => 300*q[0]*q[1]/(D.V1*D.p1);
       let Tm = 300; for(let i = 0; i <= 60; i++) Tm = Math.max(Tm, Tof(D.at(i/60)));
-      const Tmax = Tm*1.2, bx = {x:48, y:30, w:gw - 70, h:gh - 66}, tx = pvAxes(g, bx, vmax, Tmax, ink2, ink3, "T〔K〕");
-      g.font = uiFont(12); g.fillStyle = ink2; g.textBaseline = "middle"; g.textAlign = "left"; g.fillText("T-V 図", 8, 10);
-      if(P.proc === "p" && 300*vmax/D.V1 < Tmax){ g.strokeStyle = ink3; g.globalAlpha = 0.5; g.setLineDash([4, 4]); g.lineWidth = 1.2; g.beginPath(); g.moveTo(tx.X(0), tx.Y(0)); g.lineTo(tx.X(vmax), tx.Y(300*vmax/D.V1)); g.stroke(); g.setLineDash([]); g.globalAlpha = 1; }
-      g.strokeStyle = pos; g.globalAlpha = 0.3; g.lineWidth = 2; g.beginPath(); for(let i = 0; i <= 80; i++){ const q = D.at(i/80); i ? g.lineTo(tx.X(q[0]), tx.Y(Tof(q))) : g.moveTo(tx.X(q[0]), tx.Y(Tof(q))); } g.stroke(); g.globalAlpha = 1;
-      g.lineWidth = 3; g.beginPath(); for(let i = 0; i <= 80; i++){ const q = D.at(s*i/80); i ? g.lineTo(tx.X(q[0]), tx.Y(Tof(q))) : g.moveTo(tx.X(q[0]), tx.Y(Tof(q))); } g.stroke();
-      disc(g, tx.X(cur[0]), tx.Y(Tof(cur)), 6, pos);
-      label(g, "1", tx.X(D.V1) - 8, tx.Y(300) - 8, ink2, "right", uiFont(12, true)); label(g, "2", tx.X(D.V2) + 8, tx.Y(Tof([D.V2, D.p2])) - 8, ink2, "left", uiFont(12, true));
-      label(g, {v:"定積：V 一定で、T は p に比例", p:"定圧：原点を通る直線（V ∝ T）", T:"等温：T 一定", a:"断熱：T V^(2/3) ＝ 一定"}[P.proc], gw - 8, 10, ink3, "right", numFont(10)); }
+      const Tmax = Tm*1.2, bx = {x:48, y:30, w:gw - 70, h:gh - 66}, tx = gaxes(g, bx, Tmax, vmax, "T〔K〕", "V〔×10⁻³ m³〕", ink2, ink3);
+      g.font = uiFont(12); g.fillStyle = ink2; g.textBaseline = "middle"; g.textAlign = "left"; g.fillText("V-T 図", 8, 10);
+      if(P.proc === "p"){ const Te = Math.min(Tmax, 300*vmax/D.V1); g.strokeStyle = ink3; g.globalAlpha = 0.5; g.setLineDash([4, 4]); g.lineWidth = 1.2; g.beginPath(); g.moveTo(tx.X(0), tx.Y(0)); g.lineTo(tx.X(Te), tx.Y(Te*D.V1/300)); g.stroke(); g.setLineDash([]); g.globalAlpha = 1; }
+      g.strokeStyle = pos; g.globalAlpha = 0.3; g.lineWidth = 2; g.beginPath(); for(let i = 0; i <= 80; i++){ const q = D.at(i/80); i ? g.lineTo(tx.X(Tof(q)), tx.Y(q[0])) : g.moveTo(tx.X(Tof(q)), tx.Y(q[0])); } g.stroke(); g.globalAlpha = 1;
+      g.lineWidth = 3; g.beginPath(); for(let i = 0; i <= 80; i++){ const q = D.at(s*i/80); i ? g.lineTo(tx.X(Tof(q)), tx.Y(q[0])) : g.moveTo(tx.X(Tof(q)), tx.Y(q[0])); } g.stroke();
+      disc(g, tx.X(Tof(cur)), tx.Y(cur[0]), 6, pos);
+      label(g, "1", tx.X(300) - 8, tx.Y(D.V1) - 8, ink2, "right", uiFont(12, true)); label(g, "2", tx.X(Tof([D.V2, D.p2])) + 8, tx.Y(D.V2) - 8, ink2, "left", uiFont(12, true));
+      label(g, {v:"定積：T が変わっても V は一定（水平な線）", p:"定圧：原点を通る直線（V ∝ T）", T:"等温：T 一定（縦の線）", a:"断熱：T V^(2/3) ＝ 一定"}[P.proc], gw - 8, 10, ink3, "right", numFont(10)); }
     ctx.banner(`${PROC[P.proc]}：Q ＝ ΔU ＋ W′ → ${f(D.Qh,0)} ＝ ${f(D.dU,0)} ＋ ${f(D.Wp,0)}〔J〕`, "--ui");
     ctx.ro(table([[`物質量 ${S("n")}（${S("p")}₁${S("V")}₁ ＝ ${S("n")}${S("R")} × 300）`, `${f(D.n,3)} mol`], [`状態1 → 2：${S("p")}〔×10⁵ Pa〕`, `${f(D.p1,3)} → ${f(D.p2,3)}`], [`${S("V")}〔×10⁻³ m³〕`, `${f(D.V1,2)} → ${f(D.V2,2)}`], [`${S("T")}〔K〕`, `300 → ${f(D.T2,1)}`],
       [`気体がした仕事 ${S("W")}′（面積）`, `${f(D.Wp,1)} J`], [`内部エネルギーの増加 Δ${S("U")} ＝ (3/2)Δ(${S("p")}${S("V")})`, `${f(D.dU,1)} J`], [`吸収した熱量 ${S("Q")}`, `${f(D.Qh,1)} J`]]));
@@ -365,8 +523,8 @@ const pv = {
     ["同じ体積だけ膨張させるとき、等温と断熱で終わりの圧力・温度を比べよう。", "断熱のほうが圧力の下がり方が急で、温度が下がる（外への仕事を内部エネルギーでまかなうから）。"],
     ["定圧変化で、Q・ΔU・W′ の比はいくらか。", "5 : 3 : 2。"],
     ["圧縮（V₂ ＜ V₁）にすると、面積の色と W′ の符号はどうなるか。", "W′ が負（外から仕事をされる）。"],
-    ["T-V 図で、定圧変化・等温変化・定積変化はそれぞれどんな線か。", "定圧は原点を通る直線（V ∝ T）、等温は水平な線、定積は縦の線。"],
-    ["膨張させたとき、等温と断熱で T-V 図の線はどう違うか。", "等温は水平（T 一定）、断熱は右下がりの曲線（膨張すると温度が下がる）。"]
+    ["V-T 図で、定圧変化・等温変化・定積変化はそれぞれどんな線か。", "定圧は原点を通る直線（V ∝ T）、等温は縦の線（T 一定）、定積は水平な線（V 一定）。"],
+    ["膨張させたとき、等温と断熱で V-T 図の線はどう違うか。", "等温は縦の線（T 一定で V が増える）、断熱は V が増えるとき T が下がる左上がりの曲線（V ∝ T^(−3/2)）。"]
   ]
 };
 
@@ -377,7 +535,7 @@ const cycle = {
   draw(ctx){ ctx.banner("熱機関のサイクルと熱効率のページへ移動します…", "--ui"); location.replace("heat-engine.html"); }
 };
 
-LAB.app({title:"気体分子ラボ", modes:{kinetic, wall, piston, pv, cycle}});
+LAB.app({title:"気体分子ラボ", modes:{iso, isobar, kinetic, wall, piston, pv, cycle}});
 })();
 </script>
 </body>

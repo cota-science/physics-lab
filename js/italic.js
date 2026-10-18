@@ -6,7 +6,7 @@
  */
 (function(){
 "use strict";
-const UNITS = new Set("m s g N J W V A C K T Hz kg cm mm km mol Pa rad min h ms Wb H F Ω".split(" "));
+const UNITS = new Set("m s g N J W V A C K T Hz kg cm mm km mol Pa L rad min h ms Wb H F Ω".split(" "));
 const MULTI = new Set("kg Hz cm mm km mol Pa rad ms Wb min eV".split(" "));
 const KEEP = new Set("sin cos tan cot sec csc lim log ln exp max min deg arcsin arccos arctan sinh cosh tanh const".split(" "));
 const UPPER = new Set("F T L E R M N I U K V S W".split(" "));
