@@ -162,6 +162,166 @@ const merge = {
   ]
 };
 
+function fitR(R, b, pad=14){
+  const bw = Math.max(b.x1 - b.x0, 1e-6), bh = Math.max(b.y1 - b.y0, 1e-6);
+  const s = Math.min((R.w - 2*pad)/bw, (R.h - 2*pad)/bh);
+  const ox = R.x + (R.w - bw*s)/2, oy = R.y + (R.h - bh*s)/2;
+  return {s, X:x => ox + (x - b.x0)*s, Y:y => oy + bh*s - (y - b.y0)*s};
+}
+function frac(a, b){ return `<span style="display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:.92em;line-height:1.15;margin:0 2px"><span style="border-bottom:1px solid currentColor;padding:0 2px">${a}</span><span>${b}</span></span>`; }
+/* ---------- 平面上の衝突（なめらかな2球の斜め衝突） ---------- */
+const RAD = 0.3;                                   // 球の半径〔m〕（2球とも同じ）
+function obliqueModel(P){
+  const ph = P.phi*Math.PI/180, vA0 = [P.v1, 0], vB0 = [P.v2*Math.cos(ph), P.v2*Math.sin(ph)];
+  const R = 2*RAD, vr = [vA0[0] - vB0[0], vA0[1] - vB0[1]], vrl = Math.hypot(vr[0], vr[1]);
+  const tc = 1.2, tau = 0.12, dur = tc + tau + 1.4, mA = P.m1, mB = P.m2, mu = mA*mB/(mA + mB);
+  const u = vrl > 1e-6 ? [vr[0]/vrl, vr[1]/vrl] : [1, 0], up = [-u[1], u[0]];
+  const ok = vrl > 1e-6 && Math.abs(P.d) < R - 1e-6;
+  const along = ok ? Math.sqrt(R*R - P.d*P.d) : R;
+  const rBc = [0, 0], rAc = [-along*u[0] - P.d*up[0], -along*u[1] - P.d*up[1]];   // 接触した瞬間の中心
+  const n = [(rBc[0] - rAc[0])/R, (rBc[1] - rAc[1])/R];                              // A → B の向き（中心を結ぶ線）
+  const vn = vr[0]*n[0] + vr[1]*n[1], J = ok && vn > 0 ? (1 + P.e)*mu*vn : 0;       // B が受ける力積の大きさ
+  const I = [J*n[0], J*n[1]];
+  const g = s => s/2 - tau/(2*Math.PI)*Math.sin(Math.PI*s/tau), kk = s => (1 - Math.cos(Math.PI*s/tau))/2;
+  function at(t){
+    if(J === 0 || t <= tc){ const d = t - tc; return {a:[rAc[0] + vA0[0]*d, rAc[1] + vA0[1]*d], b:[rBc[0] + vB0[0]*d, rBc[1] + vB0[1]*d], va:vA0, vb:vB0, F:0, k:0}; }
+    const s = Math.min(t - tc, tau), r = t - tc - s, k = kk(s), G2 = g(s);
+    const va = [vA0[0] - I[0]/mA*k, vA0[1] - I[1]/mA*k], vb = [vB0[0] + I[0]/mB*k, vB0[1] + I[1]/mB*k];
+    const a = [rAc[0] + vA0[0]*s - I[0]/mA*G2 + va[0]*r, rAc[1] + vA0[1]*s - I[1]/mA*G2 + va[1]*r];
+    const b = [rBc[0] + vB0[0]*s + I[0]/mB*G2 + vb[0]*r, rBc[1] + vB0[1]*s + I[1]/mB*G2 + vb[1]*r];
+    const F = s < tau ? J*Math.PI/(2*tau)*Math.sin(Math.PI*s/tau) : 0;
+    return {a, b, va, vb, F, k};
+  }
+  const vA1 = [vA0[0] - I[0]/mA, vA0[1] - I[1]/mA], vB1 = [vB0[0] + I[0]/mB, vB0[1] + I[1]/mB];
+  return {ok:J > 0, tc, tau, dur, n, J, I, at, vA0, vB0, vA1, vB1, rAc, rBc, mA, mB};
+}
+const pv = (m, v) => [m*v[0], m*v[1]];
+const vstr = (p, d=2) => `(${f(p[0], d)}, ${f(p[1], d)})`;
+/* 太字斜体の記号＋添え字（例 p_A′） */
+function vsym(c, base, sub, x, y, col, opt={}){
+  c.save(); c.fillStyle = col; c.textBaseline = "middle";
+  c.font = symFont(opt.px || 14, true); const w1 = c.measureText(base).width; c.font = uiFont(11); const w2 = c.measureText(sub + (opt.prime ? "′" : "")).width;
+  let x0 = x; if(opt.align === "center") x0 = x - (w1 + w2)/2; else if(opt.align === "right") x0 = x - w1 - w2;
+  c.textAlign = "left"; c.font = symFont(opt.px || 14, true); c.fillText(base, x0, y); c.font = uiFont(11); c.fillText(sub + (opt.prime ? "′" : ""), x0 + w1 + 1, y + 4);
+  c.restore();
+}
+function midLabel(c, x1, y1, x2, y2, side, fn){ const L = Math.hypot(x2-x1, y2-y1); if(L < 14) return; const nx = -(y2-y1)/L*side, ny = (x2-x1)/L*side; fn((x1+x2)/2 + nx*13, (y1+y2)/2 + ny*13); }
+const oblique = {
+  label:"平面上の衝突",
+  params:[["m1","A の質量 "+S("m")+"<sub>A</sub>",0.5,5,0.1,"kg",1,1],["m2","B の質量 "+S("m")+"<sub>B</sub>",0.5,5,0.1,"kg",1,1],
+          ["v1","A の速さ（右向き）",0.5,5,0.1,"m/s",1,3],["v2","B の速さ",0,5,0.1,"m/s",1,0],["phi","B の進む向き（右から反時計回り）",0,360,5,"°",0,0],
+          ["d","中心のずれ "+S("d")+"（0 で正面衝突、0.60 m 以上で当たらない）",-0.6,0.6,0.01,"m",2,0.3],["e","反発係数 "+S("e"),0,1,0.05,"",2,1]],
+  toggles:[["trail","軌跡と 0.2 s ごとの位置",true],["mom","球の上の運動量の矢印",true],["line","中心を結ぶ線（力の向き）",true]],
+  timed:true, graphs:2,
+  legend:`<span><i style="background:var(--pos)"></i>A の運動量</span><span><i style="background:var(--vel)"></i>B の運動量</span><span><i style="background:var(--hl2)"></i>力積（＝ 運動量の変化）</span><span><i style="background:var(--acc)"></i>運動量の和</span><span>細い線は衝突前、太い線はいま</span>`,
+  reset(P, St){ St.M = obliqueModel(P); },
+  duration(P, St){ return St.M.dur; }, step(){},
+  draw(ctx){
+    const {P, t, T} = ctx, Md = ctx.S.M, q = Md.at(t);
+    if(window.innerWidth < 600){ if(ctx.stage.style.aspectRatio !== "2 / 3") ctx.stage.style.aspectRatio = "2 / 3"; } else if(ctx.stage.style.aspectRatio !== "16 / 10") ctx.stage.style.aspectRatio = "16 / 10";
+    const {c, w, h} = prep(ctx.stage);
+    const ink2 = css("--ink2"), ink3 = css("--ink3"), pos = css("--pos"), vel = css("--vel"), hl2 = css("--hl2"), acc = css("--acc");
+    const side = w > h*1.15;
+    const R1 = side ? {x:0, y:0, w:w*0.56, h} : {x:0, y:0, w, h:h*0.55};
+    const R2 = side ? {x:w*0.56, y:0, w:w*0.44, h} : {x:0, y:h*0.55, w, h:h*0.45};
+    // 左：平面上の運動
+    let b = {x0:1e9, x1:-1e9, y0:1e9, y1:-1e9};
+    for(let i = 0; i <= 60; i++){ const r = Md.at(Md.dur*i/60); [r.a, r.b].forEach(p => { b.x0 = Math.min(b.x0, p[0]); b.x1 = Math.max(b.x1, p[0]); b.y0 = Math.min(b.y0, p[1]); b.y1 = Math.max(b.y1, p[1]); }); }
+    const pad = RAD + 0.45; b = {x0:b.x0 - pad, x1:b.x1 + pad, y0:b.y0 - pad, y1:b.y1 + pad};
+    const tf = fitR({x:R1.x, y:R1.y + 16, w:R1.w, h:R1.h - 16}, b, 6), X = p => tf.X(p[0]), Y = p => tf.Y(p[1]);
+    label(c, "上から見た平面（なめらかな球）", R1.x + 6, R1.y + 10, ink2, "left", uiFont(12, true));
+    c.save(); c.beginPath(); c.rect(R1.x, R1.y + 18, R1.w, R1.h - 18); c.clip();
+    if(T.trail){
+      [["a", pos], ["b", vel]].forEach(([key, col]) => {
+        c.strokeStyle = col; c.globalAlpha = 0.25; c.lineWidth = 1.5; c.setLineDash([5,4]); c.beginPath();
+        for(let i = 0; i <= 120; i++){ const p = Md.at(Md.dur*i/120)[key]; i ? c.lineTo(X(p), Y(p)) : c.moveTo(X(p), Y(p)); } c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
+        for(let s = 0; s <= t + 1e-9; s += 0.2){ const p = Md.at(s)[key]; disc(c, X(p), Y(p), 2.5, col); }
+      });
+    }
+    if(T.line && Md.ok && t >= Md.tc - 1e-9){
+      const m = [(Md.rAc[0] + Md.rBc[0])/2, (Md.rAc[1] + Md.rBc[1])/2], e = 1.6;
+      c.strokeStyle = hl2; c.lineWidth = 1.2; c.setLineDash([3,4]); c.beginPath(); c.moveTo(X([m[0] - Md.n[0]*e, m[1] - Md.n[1]*e]), Y([m[0] - Md.n[0]*e, m[1] - Md.n[1]*e])); c.lineTo(X([m[0] + Md.n[0]*e, m[1] + Md.n[1]*e]), Y([m[0] + Md.n[0]*e, m[1] + Md.n[1]*e])); c.stroke(); c.setLineDash([]);
+      disc(c, X(Md.rAc), Y(Md.rAc), RAD*tf.s, null, pos); disc(c, X(Md.rBc), Y(Md.rBc), RAD*tf.s, null, vel);
+    }
+    const rr = RAD*tf.s;
+    c.globalAlpha = 0.85; disc(c, X(q.a), Y(q.a), rr, pos); disc(c, X(q.b), Y(q.b), rr, vel); c.globalAlpha = 1;
+    label(c, "A", X(q.a), Y(q.a), "#fff", "center", uiFont(12, true)); label(c, "B", X(q.b), Y(q.b), "#fff", "center", uiFont(12, true));
+    const pA = pv(Md.mA, q.va), pB = pv(Md.mB, q.vb), pA0 = pv(Md.mA, Md.vA0), pB0 = pv(Md.mB, Md.vB0), pA1 = pv(Md.mA, Md.vA1), pB1 = pv(Md.mB, Md.vB1);
+    const pmax = Math.max(Math.hypot(...pA0), Math.hypot(...pB0), Math.hypot(...pA1), Math.hypot(...pB1), 1e-6);
+    if(T.mom){
+      const k = 0.28*Math.max(b.x1 - b.x0, b.y1 - b.y0)/pmax;
+      [[q.a, pA, pos, "A"], [q.b, pB, vel, "B"]].forEach(([p, m, col, nm]) => { const ex = X(p) + m[0]*k*tf.s, ey = Y(p) - m[1]*k*tf.s; if(Math.hypot(m[0], m[1]) > 1e-6){ arrow(c, X(p), Y(p), ex, ey, col, 2.6); const L = Math.hypot(ex - X(p), ey - Y(p)) || 1; vsym(c, "p", nm, ex + (ex - X(p))/L*12, ey + (ey - Y(p))/L*12, col, {align:"center", px:13}); } });
+      if(q.F > 0){ const fk = 0.5*rr/ (Md.J*Math.PI/(2*Md.tau)) * 3; const cpt = [(q.a[0] + q.b[0])/2, (q.a[1] + q.b[1])/2];
+        arrow(c, X(cpt), Y(cpt), X(cpt) + Md.n[0]*q.F*fk, Y(cpt) - Md.n[1]*q.F*fk, hl2, 2.4); arrow(c, X(cpt), Y(cpt), X(cpt) - Md.n[0]*q.F*fk, Y(cpt) + Md.n[1]*q.F*fk, hl2, 2.4); }
+    }
+    c.restore();
+    // 右：ベクトル図（共通の倍率）
+    c.strokeStyle = css("--line"); c.lineWidth = 1; c.beginPath(); if(side){ c.moveTo(R2.x, 6); c.lineTo(R2.x, h - 6); } else { c.moveTo(6, R2.y); c.lineTo(w - 6, R2.y); } c.stroke();
+    const panels = side ? [0,1,2].map(i => ({x:R2.x, y:R2.y + R2.h*i/3, w:R2.w, h:R2.h/3})) : [0,1,2].map(i => ({x:R2.x + R2.w*i/3, y:R2.y, w:R2.w/3, h:R2.h}));
+    const Ptot = [pA0[0] + pB0[0], pA0[1] + pB0[1]];
+    const sets = [
+      [[0,0], pA0, pA1], [[0,0], pB0, pB1],
+      [[0,0], pA0, Ptot, pA1]
+    ];
+    const bbs = sets.map(pts => { let x0 = 0, x1 = 0, y0 = 0, y1 = 0; pts.forEach(p => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }); return {x0, x1, y0, y1}; });
+    const kv = Math.min(...panels.map((R, i) => Math.min((R.w - 30)/Math.max(bbs[i].x1 - bbs[i].x0, 1e-6), (R.h - 46)/Math.max(bbs[i].y1 - bbs[i].y0, 1e-6))));
+    const org = (R, bb) => [R.x + R.w/2 - (bb.x0 + bb.x1)/2*kv, R.y + 22 + (R.h - 22)/2 + (bb.y0 + bb.y1)/2*kv];
+    const pt = (o, p) => [o[0] + p[0]*kv, o[1] - p[1]*kv];
+    // A・B：運動量の変化 ＝ 力積
+    [[0, pA0, pA, pos, "A", "（B から受ける）"], [1, pB0, pB, vel, "B", "（A から受ける）"]].forEach(([i, p0, p1, col, nm, from]) => {
+      const R = panels[i], o = org(R, bbs[i]), a0 = pt(o, p0), a1 = pt(o, p1);
+      label(c, side ? `${nm}：運動量の変化 ＝ 力積${from}` : `${nm}：変化 ＝ 力積`, R.x + 8, R.y + 12, ink2, "left", uiFont(11, true));
+      if(Math.hypot(...p0) > 1e-6){ c.globalAlpha = 0.55; arrow(c, o[0], o[1], a0[0], a0[1], col, 1.8); c.globalAlpha = 1; midLabel(c, o[0], o[1], a0[0], a0[1], 1, (x, y) => vsym(c, "p", nm, x, y, col, {align:"center", px:13})); }
+      arrow(c, o[0], o[1], a1[0], a1[1], col, 3); if(Math.hypot(a1[0] - a0[0], a1[1] - a0[1]) > 14) midLabel(c, o[0], o[1], a1[0], a1[1], -1, (x, y) => vsym(c, "p", nm, x, y, col, {align:"center", px:13, prime:true}));
+      if(Math.hypot(a1[0] - a0[0], a1[1] - a0[1]) > 2){ arrow(c, a0[0], a0[1], a1[0], a1[1], hl2, 2.6); midLabel(c, a0[0], a0[1], a1[0], a1[1], 1, (x, y) => vsym(c, "I", nm, x, y, hl2, {align:"center", px:13})); }
+      disc(c, o[0], o[1], 3, ink2);
+    });
+    // 系：運動量の和は一定
+    { const R = panels[2], o = org(R, bbs[2]);
+      label(c, side ? "系：運動量の和は一定" : "系：和は一定", R.x + 8, R.y + 12, ink2, "left", uiFont(11, true));
+      const a0 = pt(o, pA0), s0 = pt(o, Ptot), a1 = pt(o, pA), s1 = pt(o, [pA[0] + pB[0], pA[1] + pB[1]]);
+      c.globalAlpha = 0.55; arrow(c, o[0], o[1], a0[0], a0[1], pos, 1.8); arrow(c, a0[0], a0[1], s0[0], s0[1], vel, 1.8); c.globalAlpha = 1;
+      arrow(c, o[0], o[1], a1[0], a1[1], pos, 3); arrow(c, a1[0], a1[1], s1[0], s1[1], vel, 3);
+      arrow(c, o[0], o[1], s0[0], s0[1], acc, 3.2, [7,4]);
+      midLabel(c, o[0], o[1], s0[0], s0[1], -1, (x, y) => label(c, "和", x, y, acc, "center", uiFont(12, true)));
+      if(Math.hypot(a1[0] - a0[0], a1[1] - a0[1]) > 2){ arrow(c, a0[0], a0[1], a1[0], a1[1], hl2, 1.6, [3,3]); }
+      disc(c, o[0], o[1], 3, ink2);
+    }
+    // 文
+    if(!Md.ok) ctx.banner(Math.abs(P.d) >= 2*RAD - 1e-6 ? "中心のずれが球の直径以上なので、当たらない" : "近づかないので、衝突しない", "--neg");
+    else if(t < Md.tc) ctx.banner("衝突前：それぞれの運動量は一定", "--ink2");
+    else if(t < Md.tc + Md.tau) ctx.banner("衝突中：中心を結ぶ線にそって、大きさが等しく逆向きの力を及ぼしあう", "--hl2");
+    else ctx.banner(`衝突後：I_A ＝ −I_B なので、運動量の和は衝突前と同じ${P.e >= 0.999 && Math.abs(P.m1 - P.m2) < 1e-9 && P.v2 === 0 ? "（質量が等しい弾性衝突：衝突後の進む向きは直角）" : ""}`, "--acc");
+    // グラフ：B が受ける力の成分（面積 ＝ 力積の成分）
+    const D = Md.dur, Fn = s => Md.at(s).F;
+    const cum = Md.ok && t > Md.tc ? (1 - Math.cos(Math.PI*Math.min(t - Md.tc, Md.tau)/Md.tau))/2 : 0;
+    graph(ctx.graphs[0], {title:"Fₓ-t（B が受ける力）", unit:"N", tmax:D, t, note:`面積 ${f(Md.I[0]*cum, 2)} N·s`, series:[{fn:s => Fn(s)*Md.n[0], color:"--vel", area:true}, {fn:s => -Fn(s)*Md.n[0], color:"--pos"}]});
+    graph(ctx.graphs[1], {title:"Fᵧ-t（B が受ける力）", unit:"N", tmax:D, t, note:`面積 ${f(Md.I[1]*cum, 2)} N·s`, series:[{fn:s => Fn(s)*Md.n[1], color:"--vel", area:true}, {fn:s => -Fn(s)*Md.n[1], color:"--pos"}]});
+    const ang = v => Math.hypot(v[0], v[1]) < 1e-6 ? "—" : `${f(Math.atan2(v[1], v[0])*180/Math.PI, 1)}°`;
+    const K0 = 0.5*Md.mA*(Md.vA0[0]**2 + Md.vA0[1]**2) + 0.5*Md.mB*(Md.vB0[0]**2 + Md.vB0[1]**2), K1 = 0.5*Md.mA*(Md.vA1[0]**2 + Md.vA1[1]**2) + 0.5*Md.mB*(Md.vB1[0]**2 + Md.vB1[1]**2);
+    const between = Md.ok && Math.hypot(...Md.vA1) > 1e-6 && Math.hypot(...Md.vB1) > 1e-6 ? Math.abs(((Math.atan2(Md.vA1[1], Md.vA1[0]) - Math.atan2(Md.vB1[1], Md.vB1[0]))*180/Math.PI + 540) % 360 - 180) : null;
+    ctx.ro(table([
+      ["", "衝突前 → 衝突後（成分は (x, y)）"],
+      [`A の運動量 ${V("p")}<sub>A</sub>`, `${vstr(pA0)} → ${vstr(pA1)} kg·m/s`],
+      [`B の運動量 ${V("p")}<sub>B</sub>`, `${vstr(pB0)} → ${vstr(pB1)} kg·m/s`],
+      [`B が受けた力積 ${V("I")}<sub>B</sub>（${V("I")}<sub>A</sub> ＝ −${V("I")}<sub>B</sub>）`, `${vstr(Md.I)} N·s（大きさ ${f(Md.J, 2)}）`],
+      [`運動量の和`, `${vstr(Ptot)} → ${vstr([pA1[0] + pB1[0], pA1[1] + pB1[1]])}`],
+      [`衝突後の速さ・向き A ／ B`, `${f(Math.hypot(...Md.vA1), 2)} m/s・${ang(Md.vA1)} ／ ${f(Math.hypot(...Md.vB1), 2)} m/s・${ang(Md.vB1)}`],
+      [`衝突後の進む向きのなす角`, between == null ? "—" : `${f(between, 1)}°`],
+      [`運動エネルギーの和`, `${f(K0, 2)} → ${f(K1, 2)} J`]
+    ]));
+    ctx.eqs(`<p class="eq"><span class="tag n">微積なし</span>各球：${S("m")}<sub>A</sub>${V("v")}<sub>A</sub>′ − ${S("m")}<sub>A</sub>${V("v")}<sub>A</sub> ＝ ${V("I")}<sub>A</sub>、${S("m")}<sub>B</sub>${V("v")}<sub>B</sub>′ − ${S("m")}<sub>B</sub>${V("v")}<sub>B</sub> ＝ ${V("I")}<sub>B</sub>（運動量の変化 ＝ 受けた力積）。作用・反作用で ${V("I")}<sub>A</sub> ＝ −${V("I")}<sub>B</sub> なので、足すと ${S("m")}<sub>A</sub>${V("v")}<sub>A</sub> ＋ ${S("m")}<sub>B</sub>${V("v")}<sub>B</sub> ＝ ${S("m")}<sub>A</sub>${V("v")}<sub>A</sub>′ ＋ ${S("m")}<sub>B</sub>${V("v")}<sub>B</sub>′</p>
+<p class="eq"><span class="tag c">微積</span>${frac("d"+V("p")+"<sub>A</sub>", "d"+S("t"))} ＝ ${V("F")}<sub>BA</sub>、${frac("d"+V("p")+"<sub>B</sub>", "d"+S("t"))} ＝ ${V("F")}<sub>AB</sub> ＝ −${V("F")}<sub>BA</sub> より ${frac("d", "d"+S("t"))}(${V("p")}<sub>A</sub> ＋ ${V("p")}<sub>B</sub>) ＝ 0。力積は ${V("I")} ＝ ∫${V("F")} d${S("t")}（グラフの面積を成分ごとに）</p>
+<p class="eq">なめらかな球なので、力は<b>中心を結ぶ線</b>の向きだけ。反発係数はこの線の向きの相対速度に使う：(${V("v")}<sub>B</sub>′ − ${V("v")}<sub>A</sub>′)·${V("n")} ＝ −${S("e")}(${V("v")}<sub>B</sub> − ${V("v")}<sub>A</sub>)·${V("n")}</p>`);
+  },
+  asks:[
+    ["質量を等しくし、B を止めて e ＝ 1 で当てよう。中心のずれ d を変えても、衝突後の2つの進む向きのなす角は何度か。", "いつも 90°。運動量の三角形と運動エネルギー保存から、p<sub>A</sub>′ と p<sub>B</sub>′ が直角になる（三平方の定理）。"],
+    ["右上・右中の図で、紫の矢印（力積）はどちら向きか。2つを比べよう。", "どちらも中心を結ぶ線の向きで、大きさが等しく逆向き（I<sub>A</sub> ＝ −I<sub>B</sub>）。なめらかなので、接する面に平行な力ははたらかない。"],
+    ["右下の図で、細い矢印（衝突前）と太い矢印（いま）の先はどこにあるか。", "同じ点（緑の「和」の先）。それぞれの運動量は変わるが、変化分が打ち消しあうので、和は変わらない。"],
+    ["e ＝ 0 にして、ずれ d を 0.3 m にしよう。2つの球は一体になるか。", "ならない。中心を結ぶ線の向きの速度成分は等しくなるが、それに垂直な成分は変わらないので、別々の向きに進む。"]
+  ]
+};
+
 /* ---------- 床ではね返るボール ---------- */
 const bounce = {
   label:"床ではね返るボール",
@@ -207,7 +367,7 @@ const bounce = {
   ]
 };
 
-LAB.app({title:"運動量ラボ", modes:{collide, merge, bounce}});
+LAB.app({title:"運動量ラボ", modes:{collide, oblique, merge, bounce}});
 })();
 </script>
 </body>

@@ -73,7 +73,7 @@ const UNITQ = ["kg·m/s（＝ N·s）", "N", "J", "m/s", "単位なし"];
 
 const SECTIONS = [
 { id:"def", advice:"運動量・力積がベクトルであること、保存の条件（外力の力積が 0）を定義カードで確かめよう。", tab:"①定義", title:"① 定義カード",
-  intro:`運動方程式は「ある瞬間」の力と加速度の関係でした。衝突のように、力が短い時間に大きく変わる現象では、力を時間で積み重ねた<b>力積</b>と、その結果としての<b>運動量</b>の変化で考えます。<br>シミュレーターで確かめよう：<br>${ANIM("anim/momentum.html#collide","一直線上の衝突と F-t 図")}${ANIM("anim/momentum.html#merge","平面での合体")}${ANIM("anim/momentum.html#bounce","床ではね返るボール")}`,
+  intro:`運動方程式は「ある瞬間」の力と加速度の関係でした。衝突のように、力が短い時間に大きく変わる現象では、力を時間で積み重ねた<b>力積</b>と、その結果としての<b>運動量</b>の変化で考えます。<br>シミュレーターで確かめよう：<br>${ANIM("anim/momentum.html#collide","一直線上の衝突と F-t 図")}${ANIM("anim/momentum.html#oblique","平面上の衝突（力積と運動量のベクトル図）")}${ANIM("anim/momentum.html#merge","平面での合体")}${ANIM("anim/momentum.html#bounce","床ではね返るボール")}`,
   ref:{label:"定義カードと導出を見る", html:DEF + DERIVE},
   groups:[
   { title:"A. 運動量と力積", qs:[
@@ -96,10 +96,10 @@ const SECTIONS = [
      explain:"内力は作用・反作用の組で、力積が打ち消しあいます。外力（重力・床からの力など）の力積があれば、その分だけ運動量の和が変わります。"},
     {id:"d6",type:"choice",prompt:"2物体が衝突するとき、2物体の運動量の和が変わらない理由として最も適切なものはどれか。",
      options:["2物体が及ぼしあう力は作用・反作用で、同じ時間はたらくので、力積の和が 0 になるから","2物体の質量の和が変わらないから","衝突で運動エネルギーが保存されるから"],answer:0,
-     explain:"大きさが等しく逆向きの力が、同じ時間 Δt はたらくので、力積は大きさが等しく逆向きです。運動エネルギーは保存されるとは限りません。"},
+     explain:`大きさが等しく逆向きの力が、同じ時間 Δt はたらくので、力積は大きさが等しく逆向きです。運動エネルギーは保存されるとは限りません。${ANIM("anim/momentum.html#oblique","平面上の衝突で I_A と I_B を見る")}`},
     {id:"d7",type:"choice",prompt:"平面上で2物体が衝突した。運動量保存則はどのように使うか。",
      options:["x 成分・y 成分それぞれで、運動量の和が保存する","運動量の大きさ（速さ × 質量）の和が保存する","衝突前の速度の向きの成分だけ保存する"],answer:0,
-     explain:`運動量はベクトルです。大きさの和は一般に保存しません。${ANIM("anim/momentum.html#merge","平面での合体")}`}
+     explain:`運動量はベクトルです。大きさの和は一般に保存しません。${ANIM("anim/momentum.html#merge","平面での合体")}${ANIM("anim/momentum.html#oblique","平面上の衝突")}`}
   ]},
   { title:"C. 反発係数", qs:[
     {id:"d8",type:"blanks",text:`一直線上の衝突の反発係数は ${e} ＝ {0}。${e} ＝ 1 の衝突を{1}、${e} ＝ 0 の衝突を{2}という。`,

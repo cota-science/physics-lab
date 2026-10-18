@@ -21,7 +21,7 @@ window.UNIT_LIST = [
     { id: "plane",      title: "1 平面内の運動",            file: "units/plane.js" },
     { id: "anim-rigid", title: "▶ 剛体ラボ",               href: "anim/rigid.html#moment", note: "力のモーメントとうでの長さ（作用点を作用線上で動かす・力の分解）、重心とてこ（密度がかたよった棒の重心を積分で）、はしごのつり合い（どの点のまわりでもモーメントの和が 0）、箱の転倒（押す・斜面で、倒れるのとすべるのはどちらが先か。垂直抗力の作用点が動く）" },
     { id: "rigid",      title: "2 剛体のつり合い",          file: "units/rigid.js" },
-    { id: "anim-momentum", title: "▶ 運動量ラボ",          href: "anim/momentum.html#collide", note: "一直線上の衝突（x-t・v-t・p-t・F-t 図が連動、力積 ＝ F-t 図の面積）、平面での合体（運動量の矢印の和）、床ではね返るボール（h′ ＝ e²h）" },
+    { id: "anim-momentum", title: "▶ 運動量ラボ",          href: "anim/momentum.html#collide", note: "一直線上の衝突（x-t・v-t・p-t・F-t 図が連動、力積 ＝ F-t 図の面積）、平面上の衝突（各球の運動量の変化 ＝ 力積、系の運動量の和が一定のベクトル図）、平面での合体（運動量の矢印の和）、床ではね返るボール（h′ ＝ e²h）" },
     { id: "momentum",   title: "3 運動量と力積",            file: "units/momentum.js" },
     { id: "anim-circular", title: "▶ 円運動ラボ",          href: "anim/circular.html#uniform", note: "等速円運動の位置・速度・加速度ベクトル（速度を1点から並べると Δv は中心向き）、円すい振り子を地面から・回転する人から見る（遠心力）、鉛直面内の円運動と糸がたるむ位置" },
     { id: "circular",   title: "4 円運動と慣性力",          file: "units/circular.js" },
