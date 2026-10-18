@@ -16,6 +16,7 @@ window.UNIT_LIST = [
     { id: "basic-lab",  title: "▶ 物理基礎ラボ（復習）", href: "https://cota-science.github.io/basicphysics-review/", note: "物理基礎の演習・シミュレーター。各単元の「物理基礎の復習」で使う" }
   ]},
   { group: "(1) 様々な運動", units: [
+    { id: "anim-deriv", title: "▶ 速度・加速度の定義ラボ",   href: "anim/deriv.html#vel", note: "一般の曲線運動で、Δt を 0 に近づけると平均の速度 Δr/Δt が接線方向の瞬間の速度 dr/dt に、平均の加速度 Δv/Δt が瞬間の加速度 dv/dt になる様子。x-t・v-t グラフの割線と接線、速度を1点から並べた図も" },
     { id: "anim-plane", title: "▶ 平面運動ラボ",            href: "anim/plane.html#proj", note: "放物運動を位置・速度・加速度ベクトルで見る。速度ベクトルを1点から並べると Δv はいつも鉛直下向き。投げる角度と到達距離、斜面への投射も" },
     { id: "plane",      title: "1 平面内の運動",            file: "units/plane.js" },
     { id: "anim-rigid", title: "▶ 剛体ラボ",               href: "anim/rigid.html#moment", note: "力のモーメントとうでの長さ（作用点を作用線上で動かす・力の分解）、重心とてこ（密度がかたよった棒の重心を積分で）、はしごのつり合い（どの点のまわりでもモーメントの和が 0）" },

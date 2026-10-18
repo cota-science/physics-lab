@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>速度・加速度の定義ラボ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDGothic&family=BIZ+UDPGothic:wght@400;700&display=swap">
+<link rel="stylesheet" href="lab.css">
+<script src="lab-common.js"></script>
+</head>
+<body>
+<script>
+(function(){
+"use strict";
+const {f, S, V, css, prep, arrow, label, symFont, uiFont, numFont, disc, table, graph} = LAB;
+const {sin, cos, PI, hypot, atan2, abs} = Math;
+
+/* ---------- 運動の例（位置・速度・加速度を式で持つ） ---------- */
+const W8 = 0.7, WC = 0.8, RC = 2;
+const PATHS = {
+  eight:{name:"一般の曲線（8の字）", T:2*PI/W8, periodic:true,
+    r:t => [3 + 2.4*sin(W8*t), 2 + 1.4*sin(2*W8*t)],
+    v:t => [2.4*W8*cos(W8*t), 2.8*W8*cos(2*W8*t)],
+    a:t => [-2.4*W8*W8*sin(W8*t), -5.6*W8*W8*sin(2*W8*t)]},
+  circle:{name:"等速円運動", T:2*PI/WC, periodic:true,
+    r:t => [2.6 + RC*cos(WC*t), 2.4 + RC*sin(WC*t)],
+    v:t => [-RC*WC*sin(WC*t), RC*WC*cos(WC*t)],
+    a:t => [-RC*WC*WC*cos(WC*t), -RC*WC*WC*sin(WC*t)]},
+  throw:{name:"放物運動", T:7/4.9, periodic:false,
+    r:t => [4*t, 7*t - 4.9*t*t],
+    v:t => [4, 7 - 9.8*t],
+    a:() => [0, -9.8]}
+};
+const PATH_OPTS = [["eight","一般の曲線（8の字）"],["circle","等速円運動"],["throw","放物運動"]];
+/* 曲線全体の範囲と、速さ・加速度の最大値（矢印の倍率に使う） */
+function stats(pa){
+  if(pa._s) return pa._s;
+  let x0 = 0, x1 = 0, y0 = 0, y1 = 0, px0 = 1e9, px1 = -1e9, py0 = 1e9, py1 = -1e9, vx0 = 0, vx1 = 0, vy0 = 0, vy1 = 0, vm = 0, am = 0;
+  for(let i = 0; i <= 400; i++){
+    const t = pa.T*i/400, r = pa.r(t), v = pa.v(t), a = pa.a(t);
+    px0 = Math.min(px0, r[0]); px1 = Math.max(px1, r[0]); py0 = Math.min(py0, r[1]); py1 = Math.max(py1, r[1]);
+    x0 = Math.min(x0, r[0]); x1 = Math.max(x1, r[0]); y0 = Math.min(y0, r[1]); y1 = Math.max(y1, r[1]);
+    vx0 = Math.min(vx0, v[0]); vx1 = Math.max(vx1, v[0]); vy0 = Math.min(vy0, v[1]); vy1 = Math.max(vy1, v[1]);
+    vm = Math.max(vm, hypot(v[0], v[1])); am = Math.max(am, hypot(a[0], a[1]));
+  }
+  return pa._s = {b:{x0, x1, y0, y1}, pb:{x0:px0, x1:px1, y0:py0, y1:py1}, vb:{x0:vx0, x1:vx1, y0:vy0, y1:vy1}, vm, am};
+}
+/* 時刻 t と、再生で小さくしていく Δt */
+function times(ctx){
+  const {P} = ctx, pa = PATHS[P.path], t0 = P.tp*pa.T;
+  const cap = pa.periodic ? Infinity : pa.T - t0, dt0 = Math.min(P.dt, cap);
+  const D = ctx.dur, tau = ctx.t;
+  const dt = tau >= D - 1e-9 ? 0 : dt0*Math.pow(1 - tau/D, 2);
+  return {pa, t0, dt0, dt, capped:P.dt > cap + 1e-9};
+}
+const sub = (p, q) => [p[0]-q[0], p[1]-q[1]];
+const mul = (p, k) => [p[0]*k, p[1]*k];
+const vec = (p, d=2) => `(${f(p[0], d)}, ${f(p[1], d)})`;
+const len = p => hypot(p[0], p[1]);
+function angDeg(p, q){ if(len(p) < 1e-9 || len(q) < 1e-9) return 0; let d = atan2(p[1], p[0]) - atan2(q[1], q[0]); while(d > PI) d -= 2*PI; while(d < -PI) d += 2*PI; return abs(d)*180/PI; }
+/* 領域 R の中に世界座標 b を等倍率で収める */
+function fitR(R, b, pad=14){
+  const bw = Math.max(b.x1 - b.x0, 1e-6), bh = Math.max(b.y1 - b.y0, 1e-6);
+  const s = Math.min((R.w - 2*pad)/bw, (R.h - 2*pad)/bh);
+  const ox = R.x + (R.w - bw*s)/2, oy = R.y + (R.h - bh*s)/2;
+  return {s, X:x => ox + (x - b.x0)*s, Y:y => oy + bh*s - (y - b.y0)*s};
+}
+function grow(b, m){ return {x0:b.x0 - m, x1:b.x1 + m, y0:b.y0 - m, y1:b.y1 + m}; }
+/* 太字斜体のベクトル記号（bar ＝ 上線つき、平均を表す） */
+function vlab(c, txt, x, y, color, opt={}){
+  c.save(); c.font = symFont(opt.px || 15, true); c.fillStyle = color; c.textAlign = opt.align || "left"; c.textBaseline = "middle";
+  const pre = opt.pre || "", post = opt.post || "";
+  c.font = symFont(opt.px || 15, false); const wp = c.measureText(pre).width; c.font = symFont(opt.px || 15, true); const wv = c.measureText(txt).width; c.font = uiFont(12); const wq = c.measureText(post).width;
+  const tot = wp + wv + wq; let x0 = x; if(c.textAlign === "right") x0 = x - tot; else if(c.textAlign === "center") x0 = x - tot/2;
+  c.textAlign = "left";
+  c.font = symFont(opt.px || 15, false); c.fillText(pre, x0, y);
+  c.font = symFont(opt.px || 15, true); c.fillText(txt, x0 + wp, y);
+  if(opt.bar){ c.strokeStyle = color; c.lineWidth = 1.4; c.beginPath(); c.moveTo(x0 + wp + 1, y - 9); c.lineTo(x0 + wp + wv + 1, y - 9); c.stroke(); }
+  c.font = uiFont(12); c.fillText(post, x0 + wp + wv + 1, y + 1);
+  c.restore();
+}
+/* 矢印の先に少し離してラベルを置く */
+function tipPos(x1, y1, x2, y2, gap=14){ const L = hypot(x2-x1, y2-y1) || 1; return [x2 + (x2-x1)/L*gap, y2 + (y2-y1)/L*gap]; }
+function frac(a, b){ return `<span style="display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:.92em;line-height:1.15;margin:0 2px"><span style="border-bottom:1px solid currentColor;padding:0 2px">${a}</span><span>${b}</span></span>`; }
+const BAR = s => `<span style="text-decoration:overline">${s}</span>`;
+const LIM = `lim<sub style="font-size:.7em">Δ${S("t")}→0</sub>`;
+
+/* x-t などのグラフに、割線（平均）と接線（瞬間）を重ねる */
+function secTan(cv, o){
+  const g = graph(cv, {title:o.title, unit:o.unit, tmax:o.tmax, series:[{fn:o.fn, color:o.color}]});
+  const {c, X, Y, w, h} = g, t0 = o.t0, t1 = o.t0 + o.dt, y0 = o.fn(t0), y1 = o.fn(t1);
+  c.save(); c.beginPath(); c.rect(8, 22, w - 16, h - 38); c.clip();
+  const L = -o.tmax, Rr = 2*o.tmax;
+  c.lineWidth = 1.6; c.strokeStyle = css("--ink2"); c.setLineDash([5,4]);
+  c.beginPath(); c.moveTo(X(L), Y(y0 + o.slope*(L - t0))); c.lineTo(X(Rr), Y(y0 + o.slope*(Rr - t0))); c.stroke(); c.setLineDash([]);
+  if(o.dt > 1e-9){
+    const m = (y1 - y0)/o.dt; c.strokeStyle = css("--hl2"); c.lineWidth = 2;
+    c.beginPath(); c.moveTo(X(L), Y(y0 + m*(L - t0))); c.lineTo(X(Rr), Y(y0 + m*(Rr - t0))); c.stroke();
+    disc(c, X(t1), Y(y1), 4, css("--hl2"));
+  }
+  disc(c, X(t0), Y(y0), 4.5, css(o.color));
+  c.restore();
+  c.font = numFont(11); c.textAlign = "right"; c.textBaseline = "alphabetic";
+  c.fillStyle = css("--hl2"); c.fillText(o.dt > 1e-9 ? `割線 ${f((y1-y0)/o.dt, 2)}` : "", w - 8, h - 4);
+  c.fillStyle = css("--ink2"); c.textAlign = "left"; c.fillText(`接線 ${f(o.slope, 2)}`, 12, h - 4);
+}
+
+/* ---------- 平均の速度 → 瞬間の速度 ---------- */
+const velMode = {
+  label:"平均の速度 → 瞬間の速度",
+  params:[["tp","点 P の時刻（運動全体を 0〜1 として）",0,0.95,0.01,"",2,0.12],["dt","時間間隔 Δt の最初の値",0.1,3,0.05,"s",2,1.6]],
+  selects:[["path","運動",PATH_OPTS,"eight"]],
+  toggles:[["pos","位置ベクトル",true],["comp","Δx・Δy に分ける",false],["trail","途中の弦を残す",true],["inst","瞬間の速度（接線）",true]],
+  timed:true, graphs:2, dt:1/60,
+  legend:`<span><i style="background:var(--pos)"></i>位置ベクトル <b class="vb">r</b></span><span><i style="background:var(--hl2)"></i>変位 Δ<b class="vb">r</b>（弦）</span><span><i style="background:var(--vel);opacity:.55"></i>平均の速度 ${BAR(V("v"))}</span><span><i style="background:var(--vel)"></i>瞬間の速度 <b class="vb">v</b></span>`,
+  reset(){}, duration(){ return 5; }, step(){},
+  draw(ctx){
+    const {P, T} = ctx, {pa, t0, dt0, dt, capped} = times(ctx), st = stats(pa);
+    const ar = window.innerWidth < 600 ? "4 / 3" : "16 / 10"; if(ctx.stage.style.aspectRatio !== ar) ctx.stage.style.aspectRatio = ar;
+    const {c, w, h} = prep(ctx.stage);
+    const ink2 = css("--ink2"), ink3 = css("--ink3"), pos = css("--pos"), vel = css("--vel"), hl2 = css("--hl2");
+    const tf = fitR({x:0, y:0, w, h}, grow(st.b, 0.6), 12);
+    const span = Math.max(st.b.x1 - st.b.x0, st.b.y1 - st.b.y0), kv = 0.32*span/st.vm;
+    // 座標軸
+    c.strokeStyle = css("--grid2"); c.lineWidth = 1; c.beginPath(); c.moveTo(tf.X(-0.4), tf.Y(0)); c.lineTo(tf.X(st.b.x1 + 0.5), tf.Y(0)); c.moveTo(tf.X(0), tf.Y(-0.4)); c.lineTo(tf.X(0), tf.Y(st.b.y1 + 0.5)); c.stroke();
+    label(c, "O", tf.X(0) - 6, tf.Y(0) + 10, ink3, "right", symFont(13)); label(c, "x", tf.X(st.b.x1 + 0.5), tf.Y(0) + 11, ink3, "right", symFont(13)); label(c, "y", tf.X(0) + 7, tf.Y(st.b.y1 + 0.45), ink3, "left", symFont(13));
+    // 軌道
+    c.strokeStyle = ink3; c.lineWidth = 1.6; c.beginPath();
+    for(let i = 0; i <= 300; i++){ const p = pa.r(pa.T*i/300); i ? c.lineTo(tf.X(p[0]), tf.Y(p[1])) : c.moveTo(tf.X(p[0]), tf.Y(p[1])); } c.stroke();
+    const rP = pa.r(t0), rQ = pa.r(t0 + dt), vP = pa.v(t0), dr = sub(rQ, rP), vbar = dt > 1e-9 ? mul(dr, 1/dt) : vP;
+    const Px = tf.X(rP[0]), Py = tf.Y(rP[1]), Qx = tf.X(rQ[0]), Qy = tf.Y(rQ[1]);
+    // 途中の弦
+    if(T.trail && dt0 > 1e-9){
+      c.globalAlpha = 0.35;
+      [1, 0.8, 0.6, 0.42, 0.27, 0.15].forEach(k => { const d = dt0*k; if(d <= dt + 1e-9) return; const q = pa.r(t0 + d);
+        c.strokeStyle = hl2; c.lineWidth = 1.2; c.beginPath(); c.moveTo(Px, Py); c.lineTo(tf.X(q[0]), tf.Y(q[1])); c.stroke(); disc(c, tf.X(q[0]), tf.Y(q[1]), 2.5, hl2); });
+      c.globalAlpha = 1;
+    }
+    // 位置ベクトル
+    if(T.pos){
+      arrow(c, tf.X(0), tf.Y(0), Px, Py, pos, 1.8);
+      if(dt > 1e-9) arrow(c, tf.X(0), tf.Y(0), Qx, Qy, pos, 1.4, [5,4]);
+      const m1 = [(tf.X(0) + Px)/2, (tf.Y(0) + Py)/2];
+      vlab(c, "r", m1[0] - 6, m1[1] - 8, pos, {align:"right", post:"(t)"});
+      if(dt > 1e-9 && hypot(Qx - Px, Qy - Py) > 26){ const m2 = [(tf.X(0) + Qx)/2, (tf.Y(0) + Qy)/2]; vlab(c, "r", m2[0] + 6, m2[1] + 10, pos, {post:"(t+Δt)"}); }
+    }
+    // 接線
+    if(T.inst){
+      const L = len(vP) || 1, u = [vP[0]/L, vP[1]/L], e = span*0.9;
+      c.strokeStyle = ink3; c.lineWidth = 1; c.setLineDash([3,4]); c.beginPath(); c.moveTo(tf.X(rP[0] - u[0]*e), tf.Y(rP[1] - u[1]*e)); c.lineTo(tf.X(rP[0] + u[0]*e), tf.Y(rP[1] + u[1]*e)); c.stroke(); c.setLineDash([]);
+    }
+    // 変位（弦）と成分
+    if(dt > 1e-9){
+      if(T.comp){
+        c.strokeStyle = hl2; c.lineWidth = 1.2; c.setLineDash([3,3]); c.beginPath(); c.moveTo(Px, Py); c.lineTo(Qx, Py); c.lineTo(Qx, Qy); c.stroke(); c.setLineDash([]);
+        if(abs(Qx - Px) > 18) label(c, "Δx", (Px + Qx)/2, Py + (Qy < Py ? 11 : -11), hl2, "center", symFont(13));
+        if(abs(Qy - Py) > 18) label(c, "Δy", Qx + (Qx > Px ? 6 : -6), (Py + Qy)/2, hl2, Qx > Px ? "left" : "right", symFont(13));
+      }
+      arrow(c, Px, Py, Qx, Qy, hl2, 2.6);
+      disc(c, Qx, Qy, 5, css("--surface"), hl2);
+      if(hypot(Qx - Px, Qy - Py) > 30){ const [lx, ly] = [(Px + Qx)/2, (Py + Qy)/2], L = hypot(Qx-Px, Qy-Py), nx = -(Qy-Py)/L, ny = (Qx-Px)/L; vlab(c, "r", lx + nx*14, ly + ny*14, hl2, {pre:"Δ", align:"center"}); }
+      label(c, "Q", Qx + 8, Qy - 10, hl2, "left", symFont(14));
+    }
+    // 平均の速度と瞬間の速度（同じ倍率）
+    const Ax = Px + vbar[0]*kv*tf.s, Ay = Py - vbar[1]*kv*tf.s;
+    if(T.inst){ const Ix = Px + vP[0]*kv*tf.s, Iy = Py - vP[1]*kv*tf.s; arrow(c, Px, Py, Ix, Iy, vel, 3); const [lx, ly] = tipPos(Px, Py, Ix, Iy, 14); vlab(c, "v", lx, ly - (dt > 1e-9 ? 9 : 0), vel, {align:"center"}); }
+    if(dt > 1e-9){ c.globalAlpha = 0.65; arrow(c, Px, Py, Ax, Ay, vel, 3, [7,4]); c.globalAlpha = 1; const L = hypot(Ax-Px, Ay-Py) || 1, nx = -(Ay-Py)/L, ny = (Ax-Px)/L; vlab(c, "v", Ax - nx*16, Ay - ny*16, vel, {align:"center", bar:true}); }
+    disc(c, Px, Py, 6, pos);
+    label(c, "P", Px - 9, Py + 13, pos, "right", symFont(14));
+    // 文と数値
+    if(dt <= 1e-9) ctx.banner("Δt → 0：平均の速度は、瞬間の速度（軌道の接線の向き）と一致する", "--vel");
+    else ctx.banner(`Δt ＝ ${f(dt, 3)} s　　平均の速度と瞬間の速度の向きのずれ ${f(angDeg(vbar, vP), 1)}°${capped ? "（放物運動は地面に着くまでで打ち切り）" : ""}`, "--hl2");
+    secTan(ctx.graphs[0], {title:"x-t（傾き ＝ vₓ）", unit:"m", tmax:pa.T, fn:t => pa.r(t)[0], color:"--pos", t0, dt, slope:vP[0]});
+    secTan(ctx.graphs[1], {title:"y-t（傾き ＝ vᵧ）", unit:"m", tmax:pa.T, fn:t => pa.r(t)[1], color:"--pos", t0, dt, slope:vP[1]});
+    ctx.ro(table([
+      [`時刻 ${S("t")}・時間間隔 Δ${S("t")}`, `${f(t0, 2)} s・${f(dt, 3)} s`],
+      [`変位 Δ${V("r")} ＝ (Δ${S("x")}, Δ${S("y")})`, `${vec(dr, 3)} m`],
+      [`平均の速度 ${BAR(V("v"))} ＝ Δ${V("r")}/Δ${S("t")}`, dt > 1e-9 ? `${vec(vbar)} m/s` : "—（Δt ＝ 0 では割れない）"],
+      [`瞬間の速度 ${V("v")} ＝ (${S("v")}<sub>x</sub>, ${S("v")}<sub>y</sub>)`, `${vec(vP)} m/s`],
+      [`大きさ |Δ${V("r")}|・|${BAR(V("v"))}|・|${V("v")}|`, `${f(len(dr), 3)} m・${dt > 1e-9 ? f(len(vbar), 2) : "—"}・${f(len(vP), 2)} m/s`]
+    ]));
+    ctx.eqs(`<p class="eq"><span class="tag n">微積なし</span>平均の速度 ${BAR(V("v"))} ＝ ${frac("Δ"+V("r"), "Δ"+S("t"))}（Δ${V("r")} ＝ ${V("r")}(${S("t")}＋Δ${S("t")}) − ${V("r")}(${S("t")})、向きは弦 PQ の向き）。Δ${S("t")} を小さくすると Q が P に近づき、弦の向きは<b>接線</b>に近づく。</p>
+<p class="eq"><span class="tag c">微積</span>${V("v")} ＝ ${LIM} ${frac("Δ"+V("r"), "Δ"+S("t"))} ＝ ${frac("d"+V("r"), "d"+S("t"))}、成分で ${S("v")}<sub>x</sub> ＝ ${frac("d"+S("x"), "d"+S("t"))}、${S("v")}<sub>y</sub> ＝ ${frac("d"+S("y"), "d"+S("t"))}（${S("x")}-${S("t")}・${S("y")}-${S("t")} グラフの接線の傾き）</p>
+<p class="note">グラフの紫の直線は割線（傾き ＝ 平均）、点線は接線（傾き ＝ 瞬間）。再生すると Δt が 0 に近づく。止めて、時刻スライダーで Δt の大きさを選んでもよい。</p>`);
+  },
+  asks:[
+    ["Δt を小さくしていくと、変位 |Δ<b class='vb'>r</b>| と平均の速度 |Δ<b class='vb'>r</b>/Δt| はそれぞれどうなるか。", "|Δr| は 0 に近づくが、Δt も 0 に近づくので、その比 |Δr/Δt| は 0 にならず、点 P での速さ |v| に近づく。"],
+    ["再生の最後で、弦 PQ の向きはどうなっているか。", "点 P での軌道の接線の向き。だから瞬間の速度は、いつも軌道の接線方向を向く。"],
+    ["x-t グラフの紫の直線（割線）と点線（接線）の傾きは、それぞれ何を表すか。", "割線の傾き Δx/Δt は平均の速度の x 成分、接線の傾き dx/dt は瞬間の速度の x 成分 vₓ。"],
+    ["「等速円運動」にして、平均の速度の大きさと瞬間の速さを比べよう。どちらが大きいか。", "平均の速度のほうが小さい。弦は弧より短いから（|Δr| < 弧の長さ ＝ vΔt）。Δt → 0 で等しくなる。"]
+  ]
+};
+
+/* ---------- 平均の加速度 → 瞬間の加速度 ---------- */
+const accMode = {
+  label:"平均の加速度 → 瞬間の加速度",
+  params:[["tp","点 P の時刻（運動全体を 0〜1 として）",0,0.95,0.01,"",2,0.12],["dt","時間間隔 Δt の最初の値",0.1,3,0.05,"s",2,1.6]],
+  selects:[["path","運動",PATH_OPTS,"eight"]],
+  toggles:[["hodo","速度の先端がえがく曲線",true],["trail","途中の Δv を残す",true],["inst","瞬間の加速度",true]],
+  timed:true, graphs:2, dt:1/60,
+  legend:`<span><i style="background:var(--vel)"></i>速度 <b class="vb">v</b></span><span><i style="background:var(--hl2)"></i>速度の変化 Δ<b class="vb">v</b></span><span><i style="background:var(--acc);opacity:.55"></i>平均の加速度 ${BAR(`<b class="vb">a</b>`)}</span><span><i style="background:var(--acc)"></i>瞬間の加速度 <b class="vb">a</b></span>`,
+  reset(){}, duration(){ return 5; }, step(){},
+  draw(ctx){
+    const {P, T} = ctx, {pa, t0, dt0, dt, capped} = times(ctx), st = stats(pa);
+    const ar = window.innerWidth < 600 ? "3 / 4" : "16 / 10"; if(ctx.stage.style.aspectRatio !== ar) ctx.stage.style.aspectRatio = ar;
+    const {c, w, h} = prep(ctx.stage);
+    const ink2 = css("--ink2"), ink3 = css("--ink3"), pos = css("--pos"), vel = css("--vel"), hl2 = css("--hl2"), acc = css("--acc");
+    const side = w > h*1.15;
+    const R1 = side ? {x:0, y:0, w:w*0.54, h} : {x:0, y:0, w, h:h*0.5};
+    const R2 = side ? {x:w*0.54, y:0, w:w*0.46, h} : {x:0, y:h*0.5, w, h:h*0.5};
+    const span = Math.max(st.b.x1 - st.b.x0, st.b.y1 - st.b.y0);
+    const tf = fitR({x:R1.x, y:R1.y + 16, w:R1.w, h:R1.h - 16}, grow(st.pb, 0.22*span), 6), kv = 0.25*span/st.vm, ka = 0.25*span/st.am;
+    // 左：軌道
+    label(c, "軌道（位置）", R1.x + 6, R1.y + 12, ink2, "left", uiFont(12, true));
+    c.strokeStyle = ink3; c.lineWidth = 1.6; c.beginPath();
+    for(let i = 0; i <= 300; i++){ const p = pa.r(pa.T*i/300); i ? c.lineTo(tf.X(p[0]), tf.Y(p[1])) : c.moveTo(tf.X(p[0]), tf.Y(p[1])); } c.stroke();
+    const rP = pa.r(t0), rQ = pa.r(t0 + dt), vP = pa.v(t0), vQ = pa.v(t0 + dt), aP = pa.a(t0), dv = sub(vQ, vP), abar = dt > 1e-9 ? mul(dv, 1/dt) : aP;
+    const Px = tf.X(rP[0]), Py = tf.Y(rP[1]), Qx = tf.X(rQ[0]), Qy = tf.Y(rQ[1]);
+    if(dt > 1e-9){ const ex = Qx + vQ[0]*kv*tf.s, ey = Qy - vQ[1]*kv*tf.s; arrow(c, Qx, Qy, ex, ey, vel, 2, [5,4]); disc(c, Qx, Qy, 4.5, css("--surface"), vel); if(hypot(Qx - Px, Qy - Py) > 34){ const [lx, ly] = tipPos(Qx, Qy, ex, ey, 13); vlab(c, "v", lx, ly, vel, {align:"center", post:"(t+Δt)", px:13}); label(c, "Q", Qx + 7, Qy + 11, ink2, "left", symFont(13)); } }
+    { const ex = Px + vP[0]*kv*tf.s, ey = Py - vP[1]*kv*tf.s; arrow(c, Px, Py, ex, ey, vel, 2.6); const [lx, ly] = tipPos(Px, Py, ex, ey, 13); vlab(c, "v", lx, ly, vel, {align:"center", post:"(t)", px:13}); }
+    if(T.inst){ const ex = Px + aP[0]*ka*tf.s, ey = Py - aP[1]*ka*tf.s; arrow(c, Px, Py, ex, ey, acc, 3); const [lx, ly] = tipPos(Px, Py, ex, ey, 12); vlab(c, "a", lx + 8, ly, acc, {align:"center"}); }
+    if(dt > 1e-9){ const ex = Px + abar[0]*ka*tf.s, ey = Py - abar[1]*ka*tf.s; c.globalAlpha = 0.65; arrow(c, Px, Py, ex, ey, acc, 3, [7,4]); c.globalAlpha = 1; const [lx, ly] = tipPos(Px, Py, ex, ey, 12); vlab(c, "a", lx - 8, ly, acc, {align:"center", bar:true}); }
+    disc(c, Px, Py, 6, pos); label(c, "P", Px - 9, Py - 11, pos, "right", symFont(14));
+    // 右：速度ベクトルを1点から並べる
+    c.strokeStyle = css("--line"); c.lineWidth = 1; c.beginPath(); if(side){ c.moveTo(R2.x, 6); c.lineTo(R2.x, h - 6); } else { c.moveTo(6, R2.y); c.lineTo(w - 6, R2.y); } c.stroke();
+    label(c, "速度ベクトルを1点 O′ から並べる", R2.x + 8, R2.y + 12, ink2, "left", uiFont(12, true));
+    const vb = st.vb, vspan = Math.max(vb.x1 - vb.x0, vb.y1 - vb.y0, 1);
+    const hf = fitR({x:R2.x, y:R2.y + 18, w:R2.w, h:R2.h - 18}, grow(vb, 0.18*vspan), 8);
+    const Ox = hf.X(0), Oy = hf.Y(0);
+    c.strokeStyle = css("--grid2"); c.beginPath(); c.moveTo(hf.X(vb.x0 - 0.1*vspan), Oy); c.lineTo(hf.X(vb.x1 + 0.12*vspan), Oy); c.moveTo(Ox, hf.Y(vb.y0 - 0.1*vspan)); c.lineTo(Ox, hf.Y(vb.y1 + 0.12*vspan)); c.stroke();
+    label(c, "vₓ", hf.X(vb.x1 + 0.12*vspan), Oy + 11, ink3, "right", symFont(12)); label(c, "vᵧ", Ox + 6, hf.Y(vb.y1 + 0.1*vspan), ink3, "left", symFont(12));
+    label(c, "O′", Ox - 5, Oy + 11, ink3, "right", symFont(13));
+    if(T.hodo){
+      c.strokeStyle = vel; c.globalAlpha = 0.3; c.lineWidth = 1.4; c.beginPath();
+      for(let i = 0; i <= 300; i++){ const v = pa.v(pa.T*i/300); i ? c.lineTo(hf.X(v[0]), hf.Y(v[1])) : c.moveTo(hf.X(v[0]), hf.Y(v[1])); } c.stroke(); c.globalAlpha = 1;
+    }
+    const P1x = hf.X(vP[0]), P1y = hf.Y(vP[1]), P2x = hf.X(vQ[0]), P2y = hf.Y(vQ[1]);
+    if(T.trail && dt0 > 1e-9){
+      c.globalAlpha = 0.35;
+      [1, 0.8, 0.6, 0.42, 0.27, 0.15].forEach(k => { const d = dt0*k; if(d <= dt + 1e-9) return; const q = pa.v(t0 + d);
+        c.strokeStyle = hl2; c.lineWidth = 1.2; c.beginPath(); c.moveTo(P1x, P1y); c.lineTo(hf.X(q[0]), hf.Y(q[1])); c.stroke(); disc(c, hf.X(q[0]), hf.Y(q[1]), 2.5, hl2); });
+      c.globalAlpha = 1;
+    }
+    if(T.inst){
+      const L = len(aP) || 1, u = [aP[0]/L, aP[1]/L], e = vspan*0.7;
+      c.strokeStyle = acc; c.lineWidth = 1.2; c.setLineDash([3,4]); c.beginPath(); c.moveTo(hf.X(vP[0] - u[0]*e), hf.Y(vP[1] - u[1]*e)); c.lineTo(hf.X(vP[0] + u[0]*e), hf.Y(vP[1] + u[1]*e)); c.stroke(); c.setLineDash([]);
+    }
+    arrow(c, Ox, Oy, P1x, P1y, vel, 2.6);
+    { const m = [(Ox + P1x)/2, (Oy + P1y)/2]; vlab(c, "v", m[0] - 6, m[1] - 9, vel, {align:"right", post:"(t)", px:13}); }
+    if(dt > 1e-9){
+      arrow(c, Ox, Oy, P2x, P2y, vel, 1.8, [5,4]);
+      if(hypot(P2x - P1x, P2y - P1y) > 26){ const m = [(Ox + P2x)/2, (Oy + P2y)/2]; vlab(c, "v", m[0] + 6, m[1] + 10, vel, {post:"(t+Δt)", px:13}); }
+      arrow(c, P1x, P1y, P2x, P2y, hl2, 2.6);
+      if(hypot(P2x - P1x, P2y - P1y) > 24){ const L = hypot(P2x-P1x, P2y-P1y), nx = -(P2y-P1y)/L, ny = (P2x-P1x)/L; vlab(c, "v", (P1x + P2x)/2 - nx*14, (P1y + P2y)/2 - ny*14, hl2, {pre:"Δ", align:"center"}); }
+    }
+    disc(c, P1x, P1y, 3.5, vel);
+    // 文と数値
+    if(dt <= 1e-9) ctx.banner("Δt → 0：平均の加速度は、瞬間の加速度（速度の先端の曲線の接線の向き）と一致する", "--acc");
+    else ctx.banner(`Δt ＝ ${f(dt, 3)} s　　平均の加速度と瞬間の加速度の向きのずれ ${f(angDeg(abar, aP), 1)}°${capped ? "（地面に着くまでで打ち切り）" : ""}`, "--hl2");
+    secTan(ctx.graphs[0], {title:"vₓ-t（傾き ＝ aₓ）", unit:"m/s", tmax:pa.T, fn:t => pa.v(t)[0], color:"--vel", t0, dt, slope:aP[0]});
+    secTan(ctx.graphs[1], {title:"vᵧ-t（傾き ＝ aᵧ）", unit:"m/s", tmax:pa.T, fn:t => pa.v(t)[1], color:"--vel", t0, dt, slope:aP[1]});
+    ctx.ro(table([
+      [`時刻 ${S("t")}・時間間隔 Δ${S("t")}`, `${f(t0, 2)} s・${f(dt, 3)} s`],
+      [`速度 ${V("v")}(${S("t")})・${V("v")}(${S("t")}＋Δ${S("t")})`, `${vec(vP)}・${vec(vQ)} m/s`],
+      [`速度の変化 Δ${V("v")}`, `${vec(dv, 3)} m/s`],
+      [`平均の加速度 ${BAR(V("a"))} ＝ Δ${V("v")}/Δ${S("t")}`, dt > 1e-9 ? `${vec(abar)} m/s²` : "—（Δt ＝ 0 では割れない）"],
+      [`瞬間の加速度 ${V("a")} ＝ (${S("a")}<sub>x</sub>, ${S("a")}<sub>y</sub>)`, `${vec(aP)} m/s²`],
+      [`大きさ |${BAR(V("a"))}|・|${V("a")}|`, `${dt > 1e-9 ? f(len(abar), 2) : "—"}・${f(len(aP), 2)} m/s²`]
+    ]));
+    ctx.eqs(`<p class="eq"><span class="tag n">微積なし</span>平均の加速度 ${BAR(V("a"))} ＝ ${frac("Δ"+V("v"), "Δ"+S("t"))}（Δ${V("v")} ＝ ${V("v")}(${S("t")}＋Δ${S("t")}) − ${V("v")}(${S("t")})、速度を1点から並べたときの<b>先端どうしを結ぶ矢印</b>）。速さが変わらなくても、向きが変われば Δ${V("v")} ≠ 0。</p>
+<p class="eq"><span class="tag c">微積</span>${V("a")} ＝ ${LIM} ${frac("Δ"+V("v"), "Δ"+S("t"))} ＝ ${frac("d"+V("v"), "d"+S("t"))} ＝ ${frac("d²"+V("r"), "d"+S("t")+"²")}、成分で ${S("a")}<sub>x</sub> ＝ ${frac("d"+S("v")+"<sub>x</sub>", "d"+S("t"))} ＝ ${frac("d²"+S("x"), "d"+S("t")+"²")}（${S("v")}<sub>x</sub>-${S("t")} グラフの接線の傾き）</p>
+<p class="note">グラフの紫の直線は割線（傾き ＝ 平均の加速度の成分）、点線は接線（傾き ＝ 瞬間の加速度の成分）。</p>`);
+  },
+  asks:[
+    ["「放物運動」にして Δt を変えると、平均の加速度はどうなるか。", "変わらない。いつも鉛直下向きで 9.8 m/s²。加速度が一定のときは、平均の加速度 ＝ 瞬間の加速度。右の図で速度の先端は縦の直線上を動く。"],
+    ["「等速円運動」にすると、Δt → 0 で Δv（加速度）はどちらを向くか。", "円の中心の向き。速さは一定でも速度の向きが変わるので、加速度は 0 ではない。"],
+    ["「8の字」で、加速度は軌道の曲がる内側・外側のどちらを向いているか。", "曲がる内側（へこんだ側）。速度の向きの成分があるところでは、速さも増えたり減ったりしている。"],
+    ["右の図の点線（速度の先端がえがく曲線の接線）と加速度の向きの関係は？", "同じ向き。a ＝ dv/dt は、速度の先端の曲線の“速度”にあたる。位置の曲線の接線が v の向きになるのと同じしくみ。"]
+  ]
+};
+
+LAB.app({title:"速度・加速度の定義ラボ", modes:{vel:velMode, acc:accMode}});
+})();
+</script>
+</body>
+</html>

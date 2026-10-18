@@ -27,6 +27,7 @@ units/            単元ファイル（1単元＝1ファイル）
 anim/             シミュレーター
   lab.css         シミュレーター共通の見た目
   lab-common.js   シミュレーター共通部品（LAB.app でタブ・設定・再生・グラフ・URL 指定を組み立てる）
+  deriv.html      速度・加速度の定義ラボ（#vel 平均の速度 → 瞬間の速度／#acc 平均の加速度 → 瞬間の加速度。path ＝ eight・circle・throw）
   plane.html      平面運動ラボ（#proj 放物運動とベクトル／#range 角度と到達距離／#slope 斜面への投射）
   rigid.html      剛体ラボ（#moment 力のモーメント／#balance 重心とてこ／#ladder はしごのつり合い）
   momentum.html   運動量ラボ（#collide 一直線上の衝突／#merge 平面での合体／#bounce 床ではね返るボール）
@@ -58,6 +59,7 @@ anim/             シミュレーター
 
 URL の `#` 以降で、モードと値を指定して開けます。問題文の ▶ ボタンはこれを使っています。
 
+- `anim/deriv.html#acc&path=circle&tp=0.12&dt=1.6`（tp ＝ 点 P の時刻を運動全体の割合で、dt ＝ Δt の最初の値）
 - `anim/plane.html#proj&v0=19.6&th=30&h=39.2`（&g=1.6 で月など）
 - `anim/plane.html#slope&v0=9.8&al=30`
 - `anim/rigid.html#moment&r=0.5&F=20&phi=60`
@@ -81,7 +83,7 @@ python3 tools/check.py gas "anim/gas.html#kinetic"   # 単元 id と、確かめ
 
 | 大項目 | 単元 | 演習 | シミュレーター |
 |---|---|---|---|
-| (1) 様々な運動 | 1 平面内の運動 | ✓ | 平面運動ラボ |
+| (1) 様々な運動 | 1 平面内の運動 | ✓ | 速度・加速度の定義ラボ、平面運動ラボ |
 | | 2 剛体のつり合い | ✓ | 剛体ラボ |
 | | 3 運動量と力積 | ✓ | 運動量ラボ |
 | | 4 円運動と慣性力 | ✓ | 円運動ラボ |
