@@ -35,7 +35,8 @@ anim/             シミュレーター
   circular.html   円運動ラボ（#uniform 等速円運動のベクトル／#conical 円すい振り子と遠心力／#vertical 鉛直面内の円運動／#train 電車の中のおもり。motion ＝ acc・const・dec、obj ＝ pend・rest・cut・spring、view ＝ train・ground）
   shm.html        単振動ラボ（#circle 円運動の影／#spring ばね振り子とエネルギー／#pendulum 大きな振れ角の単振り子／#buoy 浮力と重力の単振動（水に浮かぶ物体））
   gravitation.html 万有引力ラボ（#orbit 人工衛星の軌道と面積速度／#kepler ケプラーの第3法則／#escape 打ち上げと第2宇宙速度／#transfer 軌道の変更（人工衛星・探査機のホーマン遷移））
-  gas.html        気体分子ラボ（#kinetic 分子の運動と圧力／#wall 壁との衝突（加熱・冷却）／#piston ピストンとの衝突（圧縮・膨張）／#pv p-V 図と状態変化／#cycle 熱機関のサイクル）
+  gas.html        気体分子ラボ（#kinetic 分子の運動と圧力／#wall 壁との衝突（加熱・冷却）／#piston ピストンとの衝突（圧縮・膨張）／#pv p-V 図と状態変化）
+  heat-engine.html 熱機関のサイクルと熱効率（物理基礎ラボのステップ式ページを流用。#p2=2&V2=2 でサイクルの大きさを指定。gas.html#cycle はここへ移動する）
 ```
 
 ## 単元のつくり

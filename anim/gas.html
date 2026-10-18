@@ -116,7 +116,7 @@ function bars(cv, evs, title, avg){
 }
 
 /* ---------- 加熱（冷却）された壁に衝突する分子 ---------- */
-const MU = 3, WOM = 60, RM = 0.022, RA = 0.05, WX = 0.62;   // 壁の原子の質量（分子の3倍）、ばねの角振動数、半径、壁の位置
+const MU = 3, WOM = 100, RM = 0.022, RA = 0.07, WX = 0.62;   // 壁の原子の質量（分子の3倍）、ばねの角振動数、半径、壁の位置
 const wall = {
   label:"壁との衝突（加熱・冷却）",
   params:[["Tg","分子のはじめの温度 "+S("T")+"<sub>気体</sub>",100,1200,10,"K",0,300],["Tw","壁の温度 "+S("T")+"<sub>壁</sub>",100,1200,10,"K",0,900]],
@@ -133,24 +133,27 @@ const wall = {
   duration(){ return 60; },
   step(P, St, dt, t){
     const r = St.r, sa = CG*Math.sqrt(P.Tw/MU), gam = 3, q = St.m;
-    St.at.forEach(a => {
-      a.vx += (-WOM*WOM*(a.x - a.sx) - gam*a.vx)*dt + Math.sqrt(2*gam*dt)*sa*gauss(r);
-      a.vy += (-WOM*WOM*(a.y - a.sy) - gam*a.vy)*dt + Math.sqrt(2*gam*dt)*sa*gauss(r);
-      a.x += a.vx*dt; a.y += a.vy*dt;
-    });
-    const K0 = kinE(q); q.x += q.vx*dt; q.y += q.vy*dt;
-    if(q.x < RM){ q.x = 2*RM - q.x; q.vx = -q.vx; }
-    if(q.x > WX + 0.22){ q.x = 2*(WX + 0.22) - q.x; q.vx = -q.vx; }
-    if(q.y < RM){ q.y = 2*RM - q.y; q.vy = -q.vy; }
-    if(q.y > 1 - RM){ q.y = 2*(1 - RM) - q.y; q.vy = -q.vy; }
-    let hit = false;
-    St.at.forEach(a => {
-      const dx = q.x - a.x, dy = q.y - a.y, d = Math.hypot(dx, dy);
-      if(d >= RM + RA || d < 1e-9) return;
-      const nx = dx/d, ny = dy/d, vn = (q.vx - a.vx)*nx + (q.vy - a.vy)*ny;
-      q.x = a.x + nx*(RM + RA); q.y = a.y + ny*(RM + RA);
-      if(vn < 0){ const J = -2*vn/(1 + 1/MU); q.vx += J*nx; q.vy += J*ny; a.vx -= J/MU*nx; a.vy -= J/MU*ny; hit = true; }
-    });
+    const K0 = kinE(q); let hit = false;
+    for(let k = 0; k < 4; k++){   // 分子は4回に分けて進め、すり抜けを防ぐ
+      const h = dt/4;
+      St.at.forEach(a => {
+        a.vx += (-WOM*WOM*(a.x - a.sx) - gam*a.vx)*h + Math.sqrt(2*gam*h)*sa*gauss(r);
+        a.vy += (-WOM*WOM*(a.y - a.sy) - gam*a.vy)*h + Math.sqrt(2*gam*h)*sa*gauss(r);
+        a.x += a.vx*h; a.y += a.vy*h;
+      });
+      q.x += q.vx*h; q.y += q.vy*h;
+      if(q.x < RM){ q.x = 2*RM - q.x; q.vx = -q.vx; }
+      if(q.y < RM){ q.y = 2*RM - q.y; q.vy = -q.vy; }
+      if(q.y > 1 - RM){ q.y = 2*(1 - RM) - q.y; q.vy = -q.vy; }
+      for(let pass = 0; pass < 3; pass++) St.at.forEach(a => {
+        const dx = q.x - a.x, dy = q.y - a.y, d = Math.hypot(dx, dy);
+        if(d >= RM + RA || d < 1e-9) return;
+        const nx = dx/d, ny = dy/d, vn = (q.vx - a.vx)*nx + (q.vy - a.vy)*ny;
+        q.x = a.x + nx*(RM + RA); q.y = a.y + ny*(RM + RA);
+        if(vn < 0){ const J = -2*vn/(1 + 1/MU); q.vx += J*nx; q.vy += J*ny; a.vx -= J/MU*nx; a.vy -= J/MU*ny; hit = true; }
+      });
+      if(q.x > WX - 0.03){ St.guard = (St.guard || 0) + 1; q.x = WX - 0.03 - (q.x - (WX - 0.03)); q.vx = -Math.abs(q.vx); hit = true; }   // 念のための安全策
+    }
     const K1 = kinE(q);
     St.sumK += toE(K1)*dt; if(++St.na % 4 === 0) St.avg.push([t + dt, St.sumK/(t + dt)]);
     if(hit){
@@ -354,46 +357,11 @@ const pv = {
   ]
 };
 
-/* ---------- 熱機関のサイクル ---------- */
+/* ---------- 熱機関のサイクル：物理基礎ラボ由来のステップ式ページ（heat-engine.html）へ ---------- */
 const cycle = {
-  label:"熱機関のサイクル",
-  params:[["a","圧力の比 p_B/p_A",1.2,4,0.1,"倍",1,2],["b","体積の比 V_D/V_A",1.2,4,0.1,"倍",1,2]],
-  timed:true, graphs:0, aspect:"4/3",
-  legend:`<span><i style="background:var(--neg)"></i>熱を吸収</span><span><i style="background:var(--pos)"></i>熱を放出</span><span><i style="background:var(--hl2)"></i>面積 ＝ 正味の仕事</span>`,
-  reset(){}, duration(){ return 8; }, step(){},
-  draw(ctx){
-    const {P, t} = ctx; const {c, w, h} = prep(ctx.stage);
-    const p0V0 = 1000, A = [1, 1], B = [1, P.a], Cc = [P.b, P.a], D = [P.b, 1];
-    const legs = [["A→B", A, B, "定積"], ["B→C", B, Cc, "定圧"], ["C→D", Cc, D, "定積"], ["D→A", D, A, "定圧"]];
-    const heatOf = (s0, s1, kind) => { const dU = 1.5*(s1[0]*s1[1] - s0[0]*s0[1])*p0V0, W = kind === "定圧" ? s0[1]*(s1[0] - s0[0])*p0V0 : 0; return {dU, W, Q:dU + W}; };
-    const data = legs.map(L => Object.assign({name:L[0], kind:L[3]}, heatOf(L[1], L[2], L[3])));
-    const Win = data.reduce((s, x) => s + x.W, 0), Qin = data.filter(x => x.Q > 0).reduce((s, x) => s + x.Q, 0), eff = Win/Qin, carnot = 1 - 1/(P.a*P.b);
-    const ink2 = css("--ink2"), ink3 = css("--ink3"), pos = css("--pos"), hl2 = css("--hl2"), neg = css("--neg");
-    const box = {x:52, y:20, w:w - 80, h:h - 56};
-    const vmax = P.b*1.25, pmax = P.a*1.25;
-    const X = v => box.x + v/vmax*box.w, Y = q => box.y + box.h - q/pmax*box.h;
-    c.strokeStyle = ink2; c.lineWidth = 1.4; c.beginPath(); c.moveTo(X(0), Y(pmax)); c.lineTo(X(0), Y(0)); c.lineTo(X(vmax), Y(0)); c.stroke();
-    label(c, "p（p₀ の何倍）", X(0) + 4, Y(pmax) + 6, ink3, "left", uiFont(11)); label(c, "V（V₀ の何倍）", X(vmax), Y(0) + 14, ink3, "right", uiFont(11));
-    c.fillStyle = css("--hl2-a"); c.fillRect(X(1), Y(P.a), X(P.b) - X(1), Y(1) - Y(P.a));
-    const k = Math.min(3, Math.floor(t/2)), s = Math.min(1, (t - 2*k)/2);
-    legs.forEach((L, i) => {
-      const col = data[i].Q > 0 ? neg : pos, done = i < k || (i === k && s >= 1);
-      c.strokeStyle = col; c.globalAlpha = done || i === k ? 1 : 0.35; c.lineWidth = i === k ? 3.4 : 2.4;
-      arrow(c, X(L[1][0]), Y(L[1][1]), X(L[2][0]), Y(L[2][1]), col, i === k ? 3.4 : 2.4); c.globalAlpha = 1;
-    });
-    [["A", A], ["B", B], ["C", Cc], ["D", D]].forEach(([n, q]) => label(c, n, X(q[0]) + (q[0] > 1 ? 8 : -8), Y(q[1]) + (q[1] > 1 ? -10 : 12), ink2, q[0] > 1 ? "left" : "right", uiFont(13, true)));
-    const L = legs[k], cur = [L[1][0] + (L[2][0] - L[1][0])*s, L[1][1] + (L[2][1] - L[1][1])*s];
-    disc(c, X(cur[0]), Y(cur[1]), 7, ink2);
-    label(c, `正味の仕事 ${f(Win,0)} J`, (X(1) + X(P.b))/2, (Y(1) + Y(P.a))/2, hl2, "center", uiFont(12, true));
-    ctx.banner(`熱効率 e ＝ ${f(Win,0)} ÷ ${f(Qin,0)} ＝ ${f(eff,3)}（同じ最高・最低温度のカルノーサイクルなら ${f(carnot,3)}）`, "--ui");
-    ctx.ro(table([["過程", "Q ＝ ΔU ＋ W′〔J〕"]].concat(data.map(x => [`${x.name}（${x.kind}）`, `${f(x.Q,0)} ＝ ${f(x.dU,0)} ＋ ${f(x.W,0)}`])).concat([["吸収した熱量の和", `${f(Qin,0)} J`], ["温度（T_A の何倍）A・B・C・D", `1・${f(P.a,1)}・${f(P.a*P.b,2)}・${f(P.b,1)}`]])));
-    ctx.eqs(`<p class="eq">p₀V₀ ＝ 1.0 × 10³ J、単原子分子。ΔU ＝ (3/2)Δ(pV)、定圧の W′ ＝ pΔV、定積の W′ ＝ 0。1サイクルで ΔU の和は 0、Q の和 ＝ 正味の仕事。</p>`);
-  },
-  asks:[
-    ["圧力の比と体積の比を 2 にして（問題2）、熱効率を確かめよう。", "1000 ÷ 6500 ≒ 0.15。"],
-    ["比を大きくすると熱効率はどうなるか。1 に届くか。", "大きくなるが 1 には届かない。吸収した熱の一部は必ず放出される。"],
-    ["熱を吸収するのはどの過程か。色で確かめよう。", "温度が上がる A→B と B→C。C→D・D→A は放出。"]
-  ]
+  label:"熱機関と熱効率 ↗",
+  params:[], graphs:0, timed:false,
+  draw(ctx){ ctx.banner("熱機関のサイクルと熱効率のページへ移動します…", "--ui"); location.replace("heat-engine.html"); }
 };
 
 LAB.app({title:"気体分子ラボ", modes:{kinetic, wall, piston, pv, cycle}});

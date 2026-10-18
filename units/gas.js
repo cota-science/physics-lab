@@ -99,7 +99,7 @@ const UNITQ = ["J", "Pa", "m/s", "K", "単位なし"];
 
 const SECTIONS = [
 { id:"def", advice:"「圧力 ＝ 分子の力積の平均」「温度 ＝ 分子の平均運動エネルギー」「Q ＝ ΔU ＋ W′」を定義カードで確かめよう。", tab:"①定義", title:"① 定義カード",
-  intro:`物理基礎では、温度・熱・内部エネルギーを「分子の熱運動」としてとらえました。ここでは、目に見えない分子の運動（<b>力積</b>・<b>運動エネルギー</b>）から、圧力・温度・内部エネルギーを<b>式で</b>導きます。力学（単元3）と熱がつながる単元です。<br>シミュレーターで確かめよう：<br>${ANIM("anim/gas.html#kinetic","分子の運動と圧力")}${ANIM("anim/gas.html#wall","壁との衝突（加熱・冷却）")}${ANIM("anim/gas.html#piston","ピストンとの衝突（圧縮・膨張）")}${ANIM("anim/gas.html#pv","p-V 図と状態変化")}${ANIM("anim/gas.html#cycle","熱機関のサイクル")}`,
+  intro:`物理基礎では、温度・熱・内部エネルギーを「分子の熱運動」としてとらえました。ここでは、目に見えない分子の運動（<b>力積</b>・<b>運動エネルギー</b>）から、圧力・温度・内部エネルギーを<b>式で</b>導きます。力学（単元3）と熱がつながる単元です。<br>シミュレーターで確かめよう：<br>${ANIM("anim/gas.html#kinetic","分子の運動と圧力")}${ANIM("anim/gas.html#wall","壁との衝突（加熱・冷却）")}${ANIM("anim/gas.html#piston","ピストンとの衝突（圧縮・膨張）")}${ANIM("anim/gas.html#pv","p-V 図と状態変化")}${ANIM("anim/heat-engine.html","熱機関のサイクルと熱効率")}`,
   ref:{label:"定義カードと導出を見る", html:DEF + DERIVE_P + DERIVE_W},
   groups:[
   { title:"A. 気体の法則と分子運動論", qs:[
@@ -232,7 +232,7 @@ const SECTIONS = [
      options:["Q : ΔU : W′ ＝ 5 : 3 : 2 になっている（定圧変化ではいつもこの比）","ΔU と Q が等しいはずなので誤り","W′ のほうが ΔU より大きいはずなので誤り"],answer:0,
      explain:"定圧では Q ＝ (5/2)nRΔT、ΔU ＝ (3/2)nRΔT、W′ ＝ nRΔT。吸収した熱の 3/5 が内部エネルギー、2/5 が仕事になります。"}
   ]},
-  { title:"問題2（熱機関のサイクル・ステップ1〜3を誘導）", lead:ANIM("anim/gas.html#cycle&a=2&b=2","この問題の値で確かめる"), figure:FIG_CYCLE,
+  { title:"問題2（熱機関のサイクル・ステップ1〜3を誘導）", lead:ANIM("anim/heat-engine.html#p2=2&V2=2","この問題の値で確かめる"), figure:FIG_CYCLE,
     quote:"単原子分子の理想気体を、図の長方形のサイクル A → B → C → D → A で変化させる。状態 A の圧力・体積を p₀・V₀ とし、p₀V₀ ＝ 1.0 × 10³ J とする。各過程の熱の出入りと、熱効率を求めよ。", qs:[
     {id:"s21",type:"blanks",prompt:"ステップ2　各状態の温度を、A の温度 T₀ で表す（pV ∝ T）。",text:"B：{0}　C：{1}　D：{2}",
      options:[["2T₀","4T₀","T₀"],["4T₀","2T₀","T₀"],["2T₀","4T₀","T₀"]],answer:[0,0,0],
