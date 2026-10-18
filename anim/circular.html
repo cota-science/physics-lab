@@ -169,7 +169,192 @@ const vertical = {
   ]
 };
 
-LAB.app({title:"円運動ラボ", modes:{uniform, conical, vertical}});
+/* ---------- 電車の中のおもり（慣性系と非慣性系） ---------- */
+function fitR(R, b, pad=14){
+  const bw = Math.max(b.x1 - b.x0, 1e-6), bh = Math.max(b.y1 - b.y0, 1e-6);
+  const s = Math.min((R.w - 2*pad)/bw, (R.h - 2*pad)/bh);
+  const ox = R.x + (R.w - bw*s)/2, oy = R.y + (R.h - bh*s)/2;
+  return {s, X:x => ox + (x - b.x0)*s, Y:y => oy + bh*s - (y - b.y0)*s};
+}
+function frac(a, b){ return `<span style="display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:.92em;line-height:1.15;margin:0 2px"><span style="border-bottom:1px solid currentColor;padding:0 2px">${a}</span><span>${b}</span></span>`; }
+const PIV = 2.7, CAR = 3.2, RB = 0.12;            // つり下げ点の高さ・電車の半分の長さ・おもりの半径〔m〕
+const TV0 = {acc:0, const:4, dec:12};             // 電車のはじめの速さ〔m/s〕
+/* はじめから終わりまでを計算しておく（電車の中から見た運動を、慣性力を入れて解く） */
+function trainSim(P){
+  const aTr = v => P.motion === "acc" ? P.a : P.motion === "dec" ? (v > 1e-9 ? -P.a : 0) : 0;
+  const m = P.m, L = P.L, h = 1/600, cut = P.obj === "cut", tcut = 1.5;
+  const a0 = aTr(TV0[P.motion]), ge0 = Math.hypot(G, a0), ue = [-a0/ge0, -G/ge0];   // はじめの見かけの重力の向き
+  let s = {t:0, xt:0, vt:TV0[P.motion], ph:0, om:0, r:[0,0], v:[0,0], cut:false, landed:false};
+  const phe = Math.atan2(-a0, G);
+  if(P.obj === "pend") s.ph = P.th0*Math.PI/180;
+  if(P.obj === "rest" || cut) s.ph = phe;
+  if(P.obj === "spring"){ const re = P.L + m*ge0/P.k + P.A; s.r = [ue[0]*re, ue[1]*re]; }
+  else s.r = [L*Math.sin(s.ph), -L*Math.cos(s.ph)];
+  const dur = cut ? 6 : 6;
+  const out = [];
+  // 張力（ベクトル）と、電車から見た加速度
+  const forces = (s, at) => {
+    if(s.cut){ return {T:[0,0], ar:s.landed ? [0,0] : [-at, -G]}; }
+    if(P.obj === "spring"){ const R = Math.hypot(s.r[0], s.r[1]), Tm = P.k*(R - P.L); const T = [-Tm*s.r[0]/R, -Tm*s.r[1]/R]; return {T, ar:[T[0]/m - at, T[1]/m - G]}; }
+    const sn = Math.sin(s.ph), cs = Math.cos(s.ph), u = [-sn, cs];                    // おもり → つり下げ点
+    const Tm = m*(G*cs - at*sn + L*s.om*s.om), T = [Tm*u[0], Tm*u[1]];
+    return {T, ar:[T[0]/m - at, T[1]/m - G]};
+  };
+  let k = 0, endT = dur;
+  while(s.t <= endT + 1e-9){
+    const at = aTr(s.vt), F = forces(s, at);
+    if(k % 5 === 0) out.push({t:s.t, xt:s.xt, vt:s.vt, at, r:[s.r[0], s.r[1]], v:[s.v[0], s.v[1]], ph:s.ph, om:s.om, T:F.T, ar:F.ar, cut:s.cut, landed:s.landed});
+    k++;
+    // 電車
+    s.vt += at*h; if(P.motion === "dec" && s.vt < 0) s.vt = 0; s.xt += s.vt*h;
+    // おもり（電車から見る）
+    if(cut && !s.cut && s.t >= tcut){ s.cut = true; s.v = [s.om*L*Math.cos(s.ph), s.om*L*Math.sin(s.ph)]; endT = s.t + 3; }
+    if(s.cut){
+      if(!s.landed){ s.v[0] += F.ar[0]*h; s.v[1] += F.ar[1]*h; s.r[0] += s.v[0]*h; s.r[1] += s.v[1]*h;
+        if(s.r[1] <= -PIV + RB){ s.r[1] = -PIV + RB; s.landed = true; s.v = [0,0]; endT = Math.min(endT, s.t + 1); } }
+    } else if(P.obj === "spring"){
+      s.v[0] += F.ar[0]*h; s.v[1] += F.ar[1]*h; s.r[0] += s.v[0]*h; s.r[1] += s.v[1]*h;
+    } else {
+      const al = (-G*Math.sin(s.ph) - at*Math.cos(s.ph))/L; s.om += al*h; s.ph += s.om*h;
+      s.r = [L*Math.sin(s.ph), -L*Math.cos(s.ph)]; s.v = [s.om*L*Math.cos(s.ph), s.om*L*Math.sin(s.ph)];
+    }
+    s.t += h;
+  }
+  return {out, dur:out[out.length - 1].t, tcut, cut};
+}
+function sampleAt(S, t){ const o = S.out, i = Math.max(0, Math.min(o.length - 1, Math.round(t*120))); return o[i]; }
+/* 振り子の振れ角・ばねの長さの山から周期を測る */
+function measurePeriod(S, fn){
+  const o = S.out, peaks = [];
+  for(let i = 12; i < o.length - 12; i++){ const b = fn(o[i]); let top = true; for(let j = i - 12; j <= i + 12; j++){ if(j !== i && fn(o[j]) >= b){ top = false; break; } } if(top && (fn(o[i-12]) < b - 1e-5)) peaks.push(o[i].t); }
+  return peaks.length >= 2 ? (peaks[peaks.length - 1] - peaks[0])/(peaks.length - 1) : null;
+}
+function zig(c, x1, y1, x2, y2, n, amp, col){
+  const L = Math.hypot(x2-x1, y2-y1) || 1, ux = (x2-x1)/L, uy = (y2-y1)/L, nx = -uy, ny = ux, lead = Math.min(8, L*0.1);
+  c.strokeStyle = col; c.lineWidth = 1.6; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x1 + ux*lead, y1 + uy*lead);
+  for(let i = 1; i < 2*n; i++){ const s = lead + (L - 2*lead)*i/(2*n), sg = i % 2 ? 1 : -1; c.lineTo(x1 + ux*s + nx*amp*sg, y1 + uy*s + ny*amp*sg); }
+  c.lineTo(x2 - ux*lead, y2 - uy*lead); c.lineTo(x2, y2); c.stroke();
+}
+function vsym(c, base, sub, x, y, col, px=13){
+  c.save(); c.fillStyle = col; c.textBaseline = "middle"; c.textAlign = "left";
+  c.font = symFont(px, true); const w1 = c.measureText(base).width; c.font = uiFont(11); const w2 = c.measureText(sub).width;
+  const x0 = x - (w1 + w2)/2; c.font = symFont(px, true); c.fillText(base, x0, y); c.font = uiFont(11); c.fillText(sub, x0 + w1 + 1, y + 4); c.restore();
+}
+const train = {
+  label:"電車の中のおもり",
+  params:[["a","電車の加速度の大きさ "+S("a"),0,9.8,0.1,"m/s²",1,3],["L","糸の長さ（ばねは自然の長さ）",0.5,2.2,0.05,"m",2,1.5],["th0","はじめの振れ角（電車に対して、前向き正）",-40,40,1,"°",0,0],
+          ["m","おもりの質量 "+S("m"),0.1,2,0.05,"kg",2,0.5],["k","ばね定数 "+S("k"),5,100,1,"N/m",0,20],["A","ばねを引く長さ",0,0.4,0.01,"m",2,0.2]],
+  selects:[["motion","電車の動き",[["acc","加速（前向き）"],["const","等速"],["dec","減速（止まったら停車）"]],"acc"],
+           ["obj","おもり",[["pend","単振り子（はじめは電車に対して静止）"],["rest","傾いたつり合いの位置で静止"],["cut","つり合いで静止 → 1.5 s 後に糸を切る"],["spring","ばねでつるし、見かけの重力の向きに引いて放す"]],"pend"],
+           ["view","説明する立場",[["train","電車の中の人（非慣性系）"],["ground","地面の人（慣性系）"]],"train"]],
+  toggles:[["force","おもりにはたらく力",true],["geff","見かけの重力の向き（つり合いの糸の向き）",true],["trail","軌跡と 0.2 s ごとの位置",true]],
+  timed:true, graphs:2, dt:1/120,
+  legend:`<span><i style="background:var(--pos)"></i>張力・弾性力</span><span><i style="background:var(--acc)"></i>重力 ${S("m")}${V("g")}</span><span><i style="background:var(--hl2)"></i>慣性力 −${S("m")}${V("a")}（電車の中だけ）</span><span><i style="background:var(--vel)"></i>電車の加速度・合力</span>`,
+  reset(P, St){ St.T = trainSim(P); },
+  duration(P, St){ return St.T.dur; }, step(){},
+  draw(ctx){
+    const {P, T, t} = ctx, Sm = ctx.S.T, q = sampleAt(Sm, t), gv = P.view === "ground";
+    const show = {th0:P.obj === "pend", k:P.obj === "spring", A:P.obj === "spring", a:P.motion !== "const"};
+    ["th0","k","A","a"].forEach(key => { const el = document.getElementById("c-"+key); if(el) el.closest(".ctrl").hidden = !show[key]; });
+    const ar = window.innerWidth < 600 ? "3 / 4" : "16 / 10"; if(ctx.stage.style.aspectRatio !== ar) ctx.stage.style.aspectRatio = ar;
+    const {c, w, h} = prep(ctx.stage);
+    const ink2 = css("--ink2"), ink3 = css("--ink3"), pos = css("--pos"), vel = css("--vel"), hl2 = css("--hl2"), acc = css("--acc"), grd = css("--ground");
+    const side = w > h*1.15;
+    const R1 = side ? {x:0, y:0, w:w*0.62, h} : {x:0, y:0, w, h:h*0.58};
+    const R2 = side ? {x:w*0.62, y:0, w:w*0.38, h} : {x:0, y:h*0.58, w, h:h*0.42};
+    const tf = fitR({x:R1.x, y:R1.y + 16, w:R1.w, h:R1.h - 16}, {x0:-CAR - 0.2, x1:CAR + 0.2, y0:-0.7, y1:3.3}, 6), X = x => tf.X(x), Y = y => tf.Y(y);
+    label(c, gv ? "地面の人の説明（カメラは電車を追う・軌跡は地面に残る）" : "電車の中の人の説明（電車に対する運動）", R1.x + 6, R1.y + 10, ink2, "left", uiFont(12, true));
+    c.save(); c.beginPath(); c.rect(R1.x, R1.y + 18, R1.w, R1.h - 18); c.clip();
+    // 地面（目盛りは地面に固定。電車が動くと流れる）
+    c.strokeStyle = grd; c.lineWidth = 2; c.beginPath(); c.moveTo(R1.x, Y(-0.45)); c.lineTo(R1.x + R1.w, Y(-0.45)); c.stroke();
+    c.lineWidth = 1; const x0g = q.xt - CAR - 1;
+    for(let gx = Math.floor(x0g); gx <= q.xt + CAR + 1; gx++){ const sx = X(gx - q.xt); c.beginPath(); c.moveTo(sx, Y(-0.45)); c.lineTo(sx - 6, Y(-0.65)); c.stroke(); if(gx % 5 === 0){ c.fillStyle = ink3; c.fillRect(sx - 1, Y(-0.45) - 18, 2, 18); } }
+    // 電車
+    c.fillStyle = css("--surface2"); c.strokeStyle = ink2; c.lineWidth = 2; c.fillRect(X(-CAR), Y(3.0), 2*CAR*tf.s, 3.0*tf.s); c.strokeRect(X(-CAR), Y(3.0), 2*CAR*tf.s, 3.0*tf.s);
+    [-2.2, -1.4, 1.4, 2.2].forEach(wx => disc(c, X(wx), Y(-0.22), 0.2*tf.s, null, ink2));
+    c.fillStyle = ink2; c.fillRect(X(-0.25), Y(PIV) - 3, 0.5*tf.s, 3);
+    if(Math.abs(q.at) > 1e-9){ const sg = Math.sign(q.at), L = Math.min(1.8, 0.25*Math.abs(q.at) + 0.4); arrow(c, X(0.1*sg), Y(3.25), X((0.1 + L)*sg), Y(3.25), vel, 3); label(c, `電車の加速度 ${f(Math.abs(q.at),1)} m/s²`, X(-0.1*sg), Y(3.25), vel, sg > 0 ? "right" : "left", uiFont(11, true)); }
+    else label(c, q.vt > 1e-9 ? "電車は等速（加速度 0）" : "電車は止まっている", X(0), Y(3.25), ink2, "center", uiFont(11, true));
+    // 見かけの重力の向き
+    const ge = Math.hypot(G, q.at), ug = [-q.at/ge, -G/ge];
+    if(T.geff && !q.cut){ c.strokeStyle = acc; c.lineWidth = 1.2; c.setLineDash([4,4]); c.beginPath(); c.moveTo(X(0), Y(PIV)); c.lineTo(X(ug[0]*2.4), Y(PIV + ug[1]*2.4)); c.stroke(); c.setLineDash([]);
+      label(c, "見かけの重力の向き", X(ug[0]*2.4) + (ug[0] < 0 ? -4 : 4), Y(PIV + ug[1]*2.4) + 10, acc, ug[0] < 0 ? "right" : "left", uiFont(11)); }
+    // 軌跡（電車の中：電車に対する位置／地面：地面に対する位置を、いまの電車の位置から見て）
+    if(T.trail){
+      const tr = o => gv ? [o.xt + o.r[0] - q.xt, PIV + o.r[1]] : [o.r[0], PIV + o.r[1]];
+      c.strokeStyle = pos; c.globalAlpha = 0.35; c.lineWidth = 1.5; c.beginPath(); let first = true;
+      for(let s = 0; s <= t + 1e-9; s += 1/60){ const p = tr(sampleAt(Sm, s)); first ? c.moveTo(X(p[0]), Y(p[1])) : c.lineTo(X(p[0]), Y(p[1])); first = false; } c.stroke(); c.globalAlpha = 1;
+      for(let s = 0; s <= t + 1e-9; s += 0.2){ const p = tr(sampleAt(Sm, s)); disc(c, X(p[0]), Y(p[1]), 2.4, pos); }
+    }
+    // 糸・ばね・おもり
+    const bx = q.r[0], by = PIV + q.r[1];
+    if(!q.cut){ if(P.obj === "spring") zig(c, X(0), Y(PIV), X(bx), Y(by), 9, 5, ink2); else { c.strokeStyle = ink2; c.lineWidth = 1.5; c.beginPath(); c.moveTo(X(0), Y(PIV)); c.lineTo(X(bx), Y(by)); c.stroke(); } }
+    else { c.strokeStyle = ink3; c.lineWidth = 1.2; c.beginPath(); c.moveTo(X(0), Y(PIV)); c.lineTo(X(0), Y(PIV - 0.25)); c.stroke(); }
+    disc(c, X(bx), Y(by), RB*tf.s + 2, pos);
+    // 力
+    if(T.force && !q.landed){
+      const kf = 1.0/(P.m*Math.max(ge, G));                       // m g' が約 1.0 m になる倍率
+      const fa = (F, col, dash) => { if(Math.hypot(F[0], F[1]) < 1e-6) return; arrow(c, X(bx), Y(by), X(bx + F[0]*kf), Y(by + F[1]*kf), col, 2.6, dash); };
+      fa(q.T, pos); fa([0, -P.m*G], acc);
+      if(!gv) fa([-P.m*q.at, 0], hl2);
+      else if(!q.landed){ const net = [q.T[0], q.T[1] - P.m*G]; fa(net, vel, [6,4]); }
+    }
+    c.restore();
+    // 右：力の図（2つの立場）
+    c.strokeStyle = css("--line"); c.lineWidth = 1; c.beginPath(); if(side){ c.moveTo(R2.x, 6); c.lineTo(R2.x, h - 6); } else { c.moveTo(6, R2.y); c.lineTo(w - 6, R2.y); } c.stroke();
+    const pans = side ? [{x:R2.x, y:R2.y, w:R2.w, h:R2.h/2}, {x:R2.x, y:R2.y + R2.h/2, w:R2.w, h:R2.h/2}] : [{x:R2.x, y:R2.y, w:R2.w/2, h:R2.h}, {x:R2.x + R2.w/2, y:R2.y, w:R2.w/2, h:R2.h}];
+    const fs = Math.min(...pans.map(R => Math.min(R.w, R.h - 30)))*0.34/(P.m*Math.max(ge, G)*1.05);
+    const fbd = (R, title, list, sumF, sumName, sumNote, hi) => {
+      c.fillStyle = hi ? css("--ui-soft") : "transparent"; if(hi) c.fillRect(R.x + 2, R.y + 2, R.w - 4, R.h - 4);
+      label(c, title, R.x + 8, R.y + 12, ink2, "left", uiFont(12, true));
+      const ox = R.x + R.w/2, oy = R.y + 36 + (R.h - 36)/2;
+      list.forEach(([F, col, nm, sb]) => { if(Math.hypot(F[0], F[1]) < 1e-6) return; const ex = ox + F[0]*fs, ey = oy - F[1]*fs; arrow(c, ox, oy, ex, ey, col, 2.4); const L = Math.hypot(ex - ox, ey - oy); if(L > 8) vsym(c, nm, sb, ex + (ex - ox)/L*12, ey + (ey - oy)/L*12, col); });
+      if(Math.hypot(sumF[0], sumF[1]) > 1e-3*P.m*G){ arrow(c, ox, oy, ox + sumF[0]*fs, oy - sumF[1]*fs, vel, 2.6, [6,4]); }
+      disc(c, ox, oy, 3, ink2);
+      label(c, sumNote, R.x + 8, R.y + 28, Math.hypot(sumF[0], sumF[1]) > 1e-3*P.m*G ? vel : acc, "left", uiFont(11));
+    };
+    const Tn = q.cut ? "" : (P.obj === "spring" ? "F" : "T");
+    const net = [q.T[0], q.T[1] - P.m*G], netNI = [net[0] - P.m*q.at, net[1]];
+    const landed = q.landed;
+    fbd(pans[0], "地面（慣性系）", landed ? [] : [[q.T, pos, Tn, ""], [[0, -P.m*G], acc, "mg", ""]], landed ? [0,0] : net, "", landed ? "床に落ちた" : `点線：合力 ＝ m × ${f(Math.hypot(...net)/P.m, 2)} m/s²`, gv);
+    fbd(pans[1], "電車（非慣性系）：慣性力を加える", landed ? [] : [[q.T, pos, Tn, ""], [[0, -P.m*G], acc, "mg", ""], [[-P.m*q.at, 0], hl2, "−ma", ""]], landed ? [0,0] : netNI, "", landed ? "床に落ちた" : Math.hypot(...netNI) < 1e-3*P.m*G ? "合力 0：つり合い" : "点線：合力（電車に対して加速）", !gv);
+    // 文
+    const the = Math.atan2(Math.abs(q.at), G)*180/Math.PI, dirw = q.at > 0 ? "後ろ" : "前";
+    let msg;
+    if(q.cut && !q.landed) msg = gv ? "地面から見ると：糸を切った瞬間の電車と同じ速度を初速とする放物運動（加速度は g だけ）" : "電車から見ると：見かけの重力 g′ の向きに、初速 0 の等加速度直線運動";
+    else if(q.landed) msg = `床に落ちた：電車から見て、つり下げ点の真下から${f(Math.abs(q.r[0]), 2)} m ${q.r[0] < 0 ? "後ろ" : "前"}`;
+    else if(Math.abs(q.at) < 1e-9) msg = "加速度 0：慣性力はなく、見かけの重力は g（鉛直下向き）。等速の電車の中は地上と同じ";
+    else msg = gv ? `地面から見ると：おもりは電車と同じ加速度で動く。張力の水平成分 ＝ m a` : `電車から見ると：慣性力 m a が${dirw}向き。見かけの重力 g′ ＝ ${f(ge,2)} m/s²、鉛直から${dirw}へ ${f(the,1)}°`;
+    ctx.banner(msg, gv ? "--vel" : "--hl2");
+    // グラフ
+    const D = Sm.dur;
+    const g0 = P.obj === "spring" ? {title:"ばねの長さ", unit:"m", fn:o => Math.hypot(o.r[0], o.r[1])} : P.obj === "cut" ? {title:"おもりの位置 x（電車に対して）", unit:"m", fn:o => o.r[0]} : {title:"振れ角 θ（前向き正）", unit:"°", fn:o => o.ph*180/Math.PI};
+    graph(ctx.graphs[0], {title:g0.title, unit:g0.unit, tmax:D, t, series:[{fn:s => g0.fn(sampleAt(Sm, s)), color:"--pos"}]});
+    graph(ctx.graphs[1], {title:"水平の速度（地面から）", unit:"m/s", tmax:D, t, series:[{fn:s => sampleAt(Sm, s).vt, color:"--ink3", name:"電車"}, {fn:s => { const o = sampleAt(Sm, s); return o.vt + o.v[0]; }, color:"--pos", name:"おもり"}]});
+    // 数値
+    const ge0 = Math.hypot(G, Sm.out[0].at), Tp = 2*Math.PI*Math.sqrt(P.L/ge0), Tp0 = 2*Math.PI*Math.sqrt(P.L/G), Ts = 2*Math.PI*Math.sqrt(P.m/P.k);
+    const meas = P.obj === "pend" ? measurePeriod(Sm, o => o.ph) : P.obj === "spring" ? measurePeriod(Sm, o => Math.hypot(o.r[0], o.r[1])) : null;
+    const rows = [[`電車の加速度・速さ（いま）`, `${f(q.at, 2)} m/s²・${f(q.vt, 2)} m/s`], [`見かけの重力 ${S("g")}′ ＝ √(${S("g")}² ＋ ${S("a")}²)`, `${f(ge, 2)} m/s²`], [`つり合いの傾き tan θ ＝ ${S("a")}/${S("g")}`, `${f(the, 1)}°`]];
+    if(P.obj === "spring") rows.push([`ばね振り子の周期 2π√(${S("m")}/${S("k")})（${S("g")} によらない）`, `${f(Ts, 3)} s`], [`つり合いの伸び ${S("m")}${S("g")}′/${S("k")}`, `${f(P.m*ge0/P.k, 3)} m`]);
+    else rows.push([`単振り子の周期 2π√(${S("L")}/${S("g")}′)（小さな振れ）`, `${f(Tp, 3)} s（等速なら ${f(Tp0, 3)} s）`], [`つり合いの張力 ${S("m")}${S("g")}′`, `${f(P.m*ge0, 2)} N`]);
+    if(meas) rows.push([`シミュレーションで測った周期`, `${f(meas, 3)} s${P.obj === "pend" ? "（振れが大きいほど少し長い）" : ""}`]);
+    if(P.motion === "dec" && P.a > 0) rows.push([`電車が止まる時刻`, `${f(TV0.dec/P.a, 2)} s${TV0.dec/P.a < D ? "（そのあと慣性力 0）" : ""}`]);
+    ctx.ro(table(rows));
+    ctx.eqs(`<p class="eq"><b>地面（慣性系）</b>：運動方程式 ${S("m")}${V("a")} ＝ ${V("T")} ＋ ${S("m")}${V("g")}。つり合いの位置でおもりが電車と同じ加速度 ${V("a")} で動くには、張力の水平成分が ${S("m")}${S("a")}、鉛直成分が ${S("m")}${S("g")}</p>
+<p class="eq"><b>電車（非慣性系）</b>：慣性力 −${S("m")}${V("a")} を加えて ${V("T")} ＋ ${S("m")}${V("g")} ＋ (−${S("m")}${V("a")}) ＝ 0（つり合い）。重力と慣性力をまとめて<b>見かけの重力</b> ${S("m")}${V("g")}′、${V("g")}′ ＝ ${V("g")} − ${V("a")}、${S("g")}′ ＝ √(${S("g")}² ＋ ${S("a")}²)、tan θ ＝ ${S("a")}/${S("g")}</p>
+<p class="eq">見かけの重力の中では、重力 ${S("g")} を ${S("g")}′ に置きかえればよい：単振り子 ${S("T")} ＝ 2π√(${S("L")}/${S("g")}′)（短くなる）、ばね振り子 ${S("T")} ＝ 2π√(${S("m")}/${S("k")})（変わらない。つり合いの位置が ${S("m")}${S("g")}′/${S("k")} だけ伸びた所に移るだけ）、糸を切ると ${V("g")}′ の向きに初速 0 の等加速度直線運動</p>
+<p class="eq"><span class="tag c">微積</span>電車から見た振り子：${S("L")}${frac("d²"+S("θ"), "d"+S("t")+"²")} ＝ −${S("g")} sin ${S("θ")} − ${S("a")} cos ${S("θ")} ＝ −${S("g")}′ sin(${S("θ")} − ${S("θ")}<sub>0</sub>)（${S("θ")}<sub>0</sub> はつり合いの角）。小さな振れで単振動、ω ＝ √(${S("g")}′/${S("L")})</p>`);
+  },
+  asks:[
+    ["「傾いたつり合いの位置で静止」で、加速・等速・減速を切りかえよう。糸の傾きはどうなるか。", "加速では後ろ、減速では前に傾き、tan θ ＝ a/g。等速では鉛直（慣性力 0）。"],
+    ["「立場」を切りかえて右の2つの力の図を比べよう。何が違うか。", "地面から見ると力は T と mg だけで、合力 ma が前向き（おもりは加速している）。電車から見ると慣性力 −ma を加えて合力 0（つり合い）。どちらも同じ式になる。"],
+    ["「単振り子」で、はじめは真下に静止させて加速させよう。おもりはどう動くか。周期は等速のときと比べてどうか。", "傾いたつり合いの位置を中心に、振幅 θ₀ ＝ tan⁻¹(a/g) で振動する。周期 2π√(L/g′) は g′ ＞ g なので短い。"],
+    ["「糸を切る」で、立場を切りかえて軌跡を比べよう。", "電車から見ると g′ の向きに斜め後ろへまっすぐ落ちる。地面から見ると、切った瞬間の電車の速度で前に投げ出された放物運動。電車が加速して追いこすので、床では真下より後ろに落ちる。"],
+    ["「ばね」で加速度を変えると、周期とつり合いの位置はどうなるか。", "周期 2π√(m/k) は変わらない。つり合いの伸びが mg′/k に増え、ばねが g′ の向きに傾くだけ。"]
+  ]
+};
+
+LAB.app({title:"円運動ラボ", modes:{uniform, conical, vertical, train}});
 })();
 </script>
 </body>

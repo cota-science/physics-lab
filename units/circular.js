@@ -73,7 +73,7 @@ const UNITQ = ["m/s", "m/s²", "rad/s", "s", "N", "単位なし"];
 
 const SECTIONS = [
 { id:"def", advice:"「向心力は新しい力ではなく合力」「慣性力は加速する観測者から見たときだけ」を定義カードで確かめよう。", tab:"①定義", title:"① 定義カード",
-  intro:`速さが一定でも、向きが変われば加速度があります（単元1）。円運動では、その加速度がいつも<b>中心向き</b>です。また、加速する観測者から見たときに現れる<b>慣性力</b>（遠心力など）を学びます。<br>シミュレーターで確かめよう：<br>${ANIM("anim/circular.html#uniform","等速円運動のベクトル")}${ANIM("anim/circular.html#conical","円すい振り子（2つの立場）")}${ANIM("anim/circular.html#vertical","鉛直面内の円運動")}`,
+  intro:`速さが一定でも、向きが変われば加速度があります（単元1）。円運動では、その加速度がいつも<b>中心向き</b>です。また、加速する観測者から見たときに現れる<b>慣性力</b>（遠心力など）を学びます。<br>シミュレーターで確かめよう：<br>${ANIM("anim/circular.html#uniform","等速円運動のベクトル")}${ANIM("anim/circular.html#conical","円すい振り子（2つの立場）")}${ANIM("anim/circular.html#vertical","鉛直面内の円運動")}${ANIM("anim/circular.html#train","電車の中のおもり（2つの立場）")}`,
   ref:{label:"定義カードと導出を見る", html:DEF + DERIVE},
   groups:[
   { title:"A. 等速円運動", qs:[
@@ -140,10 +140,10 @@ const SECTIONS = [
      explain:"エレベーター内では慣性力 m × 2.0（下向き）が加わり、N ＝ m(g ＋ a) ＝ 50 × 11.8 ＝ 590 N。地面から見て運動方程式 ma ＝ N − mg でも同じです。"},
     {id:"rc2",type:"choice",prompt:"前向きに加速している電車の天井から、おもりをつるした。電車の中の人から見ると、糸はどうなるか。",
      options:["鉛直より後ろに傾いて静止する","鉛直のまま","鉛直より前に傾く"],answer:0,
-     explain:"電車内では慣性力が後ろ向きにはたらくので、重力と慣性力の合力（見かけの重力）の向きに糸が傾きます。tan θ ＝ a/g。"},
+     explain:`電車内では慣性力が後ろ向きにはたらくので、重力と慣性力の合力（見かけの重力）の向きに糸が傾きます。tan θ ＝ a/g。${ANIM("anim/circular.html#train&obj=rest&view=train","電車の中から見る")}`},
     {id:"rc3",type:"choice",prompt:"rc2 を地面に立っている人から見ると、おもりはなぜ糸が傾いた状態で電車と同じ加速度で動けるのか。",
      options:["張力と重力の合力が前向きで、その合力がおもりを加速させているから","慣性力と張力がつり合っているから","おもりには力がはたらいていないから"],answer:0,
-     explain:"地面から見るときは慣性力を考えません。張力の水平成分が ma、鉛直成分が mg と等しくなります。式は電車内の「つり合い」と同じです。"}
+     explain:`地面から見るときは慣性力を考えません。張力の水平成分が ma、鉛直成分が mg と等しくなります。式は電車内の「つり合い」と同じです。${ANIM("anim/circular.html#train&obj=rest&view=ground","地面から見る")}`}
   ]},
   { title:"D. 2通りの見方を読む", qs:[
     {id:"rd1",type:"blanks",prompt:`${NOCALC} と ${CALC} の対応を読む。`,text:`速度ベクトルを1点から並べると、先端は半径 {0} の円をえがく。先端が回る速さが加速度の大きさで、{1} ＝ ${v}²/${r}。微積では、${B("r")} を ${t} で{2}微分したものにあたる。`,
