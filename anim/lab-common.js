@@ -138,7 +138,7 @@ function app(cfg){
   }
   function sync(){
     const m = M();
-    (m.params || []).forEach(([k, , , , , u, d]) => { $("c-"+k).value = P[k]; $("v-"+k).textContent = `${f(P[k], d)}${u ? (u === "°" ? "°" : " "+u) : ""}`; });
+    (m.params || []).forEach(([k, , , , , u, d, , rng]) => { const el = $("c-"+k); if(rng){ const [a, b, st] = rng(P); el.min = a; el.max = b; el.step = st; } el.value = P[k]; $("v-"+k).textContent = `${f(P[k], d)}${u ? (u === "°" ? "°" : " "+u) : ""}`; });
     (m.selects || []).forEach(([k]) => { $("c-"+k).value = P[k]; });
     (m.toggles || []).forEach(([k]) => { const el = document.querySelector(`[data-t="${k}"]`); if(el) el.checked = !!T[k]; });
   }

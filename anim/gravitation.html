@@ -16,23 +16,45 @@
 (function(){
 "use strict";
 const {f, S, V, css, prep, arrow, label, symFont, uiFont, numFont, fit, disc, table, graph} = LAB;
-const GM = 4.0e14, R = 6.4e6, PI2 = Math.PI*2, DISP = 10;   // DISP：1周などを何秒で見せるか
+const PI2 = Math.PI*2, DISP = 10;   // DISP：1周などを何秒で見せるか
+/* 中心天体（質量は GM、半径 R）。軌道・打ち上げ・軌道の変更のモードで切りかえる */
+const BODIES = {
+  earth:{ch:"地", n:"地球", GM:4.0e14, R:6.4e6, c1:"#5fa8e8", c2:"#1f5fa8", lab:"#fff"},
+  moon:{ch:"月", n:"月", GM:4.9e12, R:1.74e6, c1:"#f0f0e8", c2:"#8f8f88", lab:"#333"},
+  venus:{ch:"金", n:"金星", GM:3.25e14, R:6.05e6, c1:"#f4e2b0", c2:"#c9954a", lab:"#5a3a10"},
+  mars:{ch:"火", n:"火星", GM:4.28e13, R:3.39e6, c1:"#f0a37c", c2:"#a8431f", lab:"#fff"},
+  jupiter:{ch:"木", n:"木星", GM:1.267e17, R:7.15e7, c1:"#efd3ab", c2:"#b9824d", lab:"#3a2410"},
+  sun:{ch:"日", n:"太陽", GM:1.327e20, R:6.96e8, c1:"#fff2b0", c2:"#e8a32e", lab:"#5a3a00"}
+};
+let GM = 4.0e14, R = 6.4e6, BODY = BODIES.earth, EU = 1e7, EUN = "×10⁷ J";
+const SUPD = {"-":"⁻","0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹"};
+const sup = n => String(n).split("").map(ch => SUPD[ch] || ch).join("");
+const sci = x => { const n = Math.floor(Math.log10(x)); return `${(x/Math.pow(10, n)).toFixed(1)} × 10${sup(n)}`; };
+function setBody(k){ BODY = BODIES[k] || BODIES.earth; GM = BODY.GM; R = BODY.R; const n = Math.floor(Math.log10(GM/R)); EU = Math.pow(10, n); EUN = "×10" + sup(n) + " J"; }
+const BODY_SEL = ["body","中心天体",[["earth","地球"],["moon","月"],["venus","金星"],["mars","火星"],["jupiter","木星"],["sun","太陽"]],"earth"];
+function vRng(P){ setBody(P.body); const vs = Math.sqrt(GM/R)/1e3, st = vs < 5 ? 0.02 : vs < 20 ? 0.05 : vs < 100 ? 0.1 : 1; return [+Math.max(st, Math.round(0.127*vs/st)*st).toFixed(2), +(Math.round(1.77*vs/st)*st).toFixed(2), st]; }
+const vStep = P => vRng(P)[2];
+let oBody = null, eBody = null, tBody = null;
 
 function earth(c, tf, ink2){
   const g = c.createRadialGradient(tf.X(0) - 0.3*R*tf.s, tf.Y(0) - 0.3*R*tf.s, 0.1*R*tf.s, tf.X(0), tf.Y(0), R*tf.s);
-  g.addColorStop(0, "#5fa8e8"); g.addColorStop(1, "#1f5fa8");
+  g.addColorStop(0, BODY.c1); g.addColorStop(1, BODY.c2);
   c.fillStyle = g; c.beginPath(); c.arc(tf.X(0), tf.Y(0), R*tf.s, 0, PI2); c.fill();
-  label(c, "地球", tf.X(0), tf.Y(0), "#fff", "center", uiFont(12, true));
+  label(c, BODY.n, tf.X(0), tf.Y(0), BODY.lab, "center", uiFont(12, true));
 }
 
 /* ---------- 人工衛星の軌道 ---------- */
 const orbit = {
   label:"人工衛星の軌道",
-  params:[["r0","打ち出す位置（中心から、R の何倍）",1.05,4,0.05,"R",2,2],["v0","打ち出す速さ（水平）",1,14,0.05,"km/s",2,5.6]],
+  params:[["r0","打ち出す位置（中心から、R の何倍）",1.05,4,0.05,"R",2,2],["v0","打ち出す速さ（水平）",1,14,0.05,"km/s",2,5.6,vRng]],
+  selects:[BODY_SEL],
   toggles:[["area","面積速度（等しい時間の扇形）",true]],
   timed:true, graphs:3,
   legend:`<span><i style="background:var(--pos)"></i>衛星・軌道</span><span><i style="background:var(--vel)"></i>速度</span><span><i style="background:var(--acc)"></i>万有引力</span><span><i style="background:var(--hl2)"></i>等しい時間に通る扇形</span>`,
   reset(P, St){
+    setBody(P.body);
+    if((oBody !== null && P.body !== oBody) || (oBody === null && P.body !== "earth" && P.r0 === 2 && P.v0 === 5.6)){ const st = vStep(P); P.r0 = 2; P.v0 = +(Math.round(Math.sqrt(GM/(2*R))/1e3/st)*st).toFixed(2); }
+    oBody = P.body;
     const r0 = P.r0*R, v0 = P.v0*1e3, eps = v0*v0/2 - GM/r0;
     St.x = r0; St.y = 0; St.vx = 0; St.vy = v0; St.tp = 0; St.crash = false; St.trace = [[r0, 0, 0]]; St.ts = [[0, P.r0, P.v0, eps]];
     if(eps < 0){ const a = -GM/(2*eps); St.bound = true; St.a = a; St.Tphys = PI2*Math.sqrt(a*a*a/GM); St.span = St.Tphys*1.02; }
@@ -80,37 +102,38 @@ const orbit = {
     St.trace.forEach((p, i) => { if(i % step === 0 || i === St.trace.length - 1){ i ? c.lineTo(tf.X(p[0]), tf.Y(p[1])) : c.moveTo(tf.X(p[0]), tf.Y(p[1])); } }); c.stroke();
     earth(c, tf, ink2);
     const sx = tf.X(St.x), sy = tf.Y(St.y), r = Math.hypot(St.x, St.y), v = Math.hypot(St.vx, St.vy);
-    const kv = 0.35*Math.min(w, h)/14e3;
+    const kv = 0.35*Math.min(w, h)/(1.77*Math.sqrt(GM/R));
     arrow(c, sx, sy, sx + St.vx*kv, sy - St.vy*kv, vel, 2.6);
     const ga = Math.max(16, Math.min(80, 34*(GM/(r*r))/(GM/(P.r0*R)**2)));
     arrow(c, sx, sy, sx - St.x/r*ga, sy + St.y/r*ga, acc, 2.2);
     disc(c, sx, sy, 6, pos);
     const vc = Math.sqrt(GM/(P.r0*R))/1e3, ve = Math.sqrt(2*GM/(P.r0*R))/1e3;
     let type;
-    if(St.crash) type = "地表に落ちた（速さが足りない）";
+    if(St.crash) type = `${BODY.n}の表面に落ちた（速さが足りない）`;
     else if(Math.abs(P.v0 - vc) < 0.03) type = "円軌道（v₀ ＝ √(GM/r)）";
-    else if(P.v0 < vc) type = "楕円軌道（打ち出した点が遠地点）";
-    else if(P.v0 < ve - 1e-9) type = "楕円軌道（打ち出した点が近地点）";
-    else type = P.v0 < ve + 0.03 ? "放物線軌道（ちょうど脱出）" : "双曲線軌道（地球から離れていく）";
+    else if(P.v0 < vc) type = `楕円軌道（打ち出した点が遠${BODY.ch}点）`;
+    else if(P.v0 < ve - 1e-9) type = `楕円軌道（打ち出した点が近${BODY.ch}点）`;
+    else type = P.v0 < ve + 0.03 ? "放物線軌道（ちょうど脱出）" : `双曲線軌道（${BODY.n}から離れていく）`;
     ctx.banner(type, St.crash ? "--neg" : St.bound ? "--ui" : "--acc");
     const ts = St.ts;
     graph(ctx.graphs[0], {title:"中心からの距離 r-t（R の何倍）", unit:"", tmax:St.span/3600, t:St.tp/3600, ylo:0, series:[{pts:ts.map(p => [p[0], p[1]]), color:"--pos"}]});
     graph(ctx.graphs[1], {title:"速さ v-t", unit:"km/s", tmax:St.span/3600, t:St.tp/3600, ylo:0, series:[{pts:ts.map(p => [p[0], p[2]]), color:"--vel"}]});
-    graph(ctx.graphs[2], {title:"1 kg あたりのエネルギー（×10⁷ J）", unit:"", tmax:St.span/3600, t:St.tp/3600, series:[
-      {pts:ts.map(p => [p[0], (p[2]*1e3)**2/2/1e7]), color:"--vel", name:"運動"}, {pts:ts.map(p => [p[0], -GM/(p[1]*R)/1e7]), color:"--hl2", name:"位置"}, {pts:ts.map(p => [p[0], p[3]/1e7]), color:"--acc", name:"和"}]});
+    graph(ctx.graphs[2], {title:`1 kg あたりのエネルギー（${EUN}）`, unit:"", tmax:St.span/3600, t:St.tp/3600, series:[
+      {pts:ts.map(p => [p[0], (p[2]*1e3)**2/2/EU]), color:"--vel", name:"運動"}, {pts:ts.map(p => [p[0], -GM/(p[1]*R)/EU]), color:"--hl2", name:"位置"}, {pts:ts.map(p => [p[0], p[3]/EU]), color:"--acc", name:"和"}]});
     const rows = [[`経過時間`, `${f(St.tp/3600,2)} h`], [`いまの距離・速さ`, `${f(r/R,2)} R・${f(v/1e3,2)} km/s`],
       [`この位置での円軌道の速さ √(${S("G")}${S("M")}/${S("r")})`, `${f(vc,2)} km/s`], [`脱出速度 √(2${S("G")}${S("M")}/${S("r")})`, `${f(ve,2)} km/s`],
-      [`力学的エネルギー（1 kg あたり）`, `${f(St.eps/1e7,3)} × 10⁷ J（${St.eps < 0 ? "負：束縛" : "0以上：脱出"}）`]];
-    if(St.bound) rows.push([`周期`, `${f(St.Tphys/3600,2)} h`], [`面積速度 ½${S("r")}${S("v")}`, `${f(0.5*P.r0*R*P.v0*1e3/1e10,3)} × 10¹⁰ m²/s（一定）`]);
+      [`力学的エネルギー（1 kg あたり）`, `${f(St.eps/EU,3)} ${EUN}（${St.eps < 0 ? "負：束縛" : "0以上：脱出"}）`]];
+    if(St.bound) rows.push([`周期`, `${f(St.Tphys/3600,2)} h`], [`面積速度 ½${S("r")}${S("v")}`, `${sci(0.5*P.r0*R*P.v0*1e3)} m²/s（一定）`]);
     ctx.ro(table(rows));
-    ctx.eqs(`<p class="eq">${S("G")}${S("M")} ＝ ${S("g")}${S("R")}² ≒ 4.0 × 10¹⁴ m³/s²、${S("R")} ＝ 6.4 × 10⁶ m。扇形は ${St.bound ? "周期の 1/12" : "等しい時間"} ごと。どれも面積が等しい（ケプラーの第2法則）。</p>
+    ctx.eqs(`<p class="eq">${S("G")}${S("M")} ≒ ${sci(GM)} m³/s²、${S("R")} ＝ ${sci(R)} m（${BODY.n}）。扇形は ${St.bound ? "周期の 1/12" : "等しい時間"} ごと。どれも面積が等しい（ケプラーの第2法則）。</p>
       <p class="eq">½${S("m")}${S("v")}² − ${S("G")}${S("M")}${S("m")}/${S("r")} ＝ 一定（緑の線が水平）。近づくと位置エネルギーが減り、速くなる。</p>`);
   },
   asks:[
-    ["r₀ ＝ 2R で v₀ ＝ 5.6 km/s にしよう。どんな軌道か。周期は？", "円軌道。周期は約 4.0 h。"],
+    ["中心天体が地球のとき、r₀ ＝ 2R で v₀ ＝ 5.6 km/s にしよう。どんな軌道か。周期は？", "円軌道。周期は約 4.0 h。"],
     ["v₀ を 6.5 km/s に上げよう。扇形（等しい時間に通る部分）の形を比べよう。", "遠地点の近くでは細長く、近地点の近くでは太く短い。面積は等しい（面積速度一定）。"],
     ["v₀ を √2 倍（約 7.9 km/s）にするとどうなるか。エネルギーのグラフの「和」は？", "脱出する（放物線）。力学的エネルギーの和がちょうど 0。"],
-    ["v₀ を 4.0 km/s に下げよう。", "楕円の遠地点から落ちていき、近地点が地球の半径より小さいと地表に落ちる。"]
+    ["v₀ を 4.0 km/s に下げよう。", "楕円の遠地点から落ちていき、近地点が地球の半径より小さいと地表に落ちる。"],
+    ["中心天体を月・火星・木星・太陽にかえよう（r₀ ＝ 2R のまま、v₀ は自動でその位置の円軌道の速さになる）。円軌道の速さと周期はどう変わるか。", "速さは √(GM/r) なので、質量が大きく半径が小さい天体ほど速い（地球 5.6、月 1.2、金星 5.2、火星 2.5、木星 29.8、太陽 309 km/s 付近）。周期は 2π√(r³/GM) で、r ＝ 2R のときは平均密度が小さい天体ほど長い（地球 約4.0 h、月 約5.1 h、金星 約4.1 h、火星 約4.7 h、木星 約8.4 h、太陽 約7.9 h）。"]
   ]
 };
 
@@ -158,10 +181,14 @@ const kepler = {
 /* ---------- 打ち上げと第2宇宙速度 ---------- */
 const escape = {
   label:"打ち上げと第2宇宙速度",
-  params:[["v0","打ち上げる速さ（鉛直上向き）",1,14,0.05,"km/s",2,11.2]],
+  params:[["v0","打ち上げる速さ（鉛直上向き）",1,14,0.05,"km/s",2,11.2,vRng]],
+  selects:[BODY_SEL],
   timed:true, graphs:2, wide:[0,1],
   legend:`<span><i style="background:var(--pos)"></i>物体</span><span><i style="background:var(--hl2)"></i>位置エネルギー U(r)/m ＝ −GM/r</span><span><i style="background:var(--acc)"></i>力学的エネルギー（一定）</span><span><i style="background:var(--vel)"></i>運動エネルギー</span>`,
   reset(P, St){
+    setBody(P.body);
+    if((eBody !== null && P.body !== eBody) || (eBody === null && P.body !== "earth" && P.v0 === 11.2)){ const st = vStep(P); P.v0 = +(Math.ceil(Math.sqrt(2*GM/R)/1e3/st - 1e-9)*st).toFixed(2); }
+    eBody = P.body;
     const v0 = P.v0*1e3, E = v0*v0/2 - GM/R; St.E = E; St.r = R; St.v = v0; St.tp = 0; St.done = false; St.ts = [[0, 1, P.v0]];
     St.rmax = E < 0 ? GM/(-E) : Infinity;
     let span = 0;
@@ -187,7 +214,7 @@ const escape = {
     if(St.rmax !== Infinity && St.rmax/R <= top){ c.strokeStyle = css("--acc"); c.beginPath(); c.moveTo(tf.X(-0.45*R), tf.Y(St.rmax)); c.lineTo(tf.X(0.45*R), tf.Y(St.rmax)); c.stroke(); label(c, "最高点", tf.X(-0.5*R), tf.Y(St.rmax), css("--acc"), "right", uiFont(11)); }
     const y = Math.min(St.r, top*R);
     disc(c, tf.X(0), tf.Y(y), 6, pos);
-    if(St.v !== 0) arrow(c, tf.X(0) + 12, tf.Y(y), tf.X(0) + 12, tf.Y(y) - St.v/1e3*4, vel, 2.6);
+    if(St.v !== 0) arrow(c, tf.X(0) + 12, tf.Y(y), tf.X(0) + 12, tf.Y(y) - St.v/1e3*4*(7.9/(Math.sqrt(GM/R)/1e3)), vel, 2.6);
     const ve = Math.sqrt(2*GM/R)/1e3;
     ctx.banner(St.E >= 0 ? `第2宇宙速度 ${f(ve,2)} km/s 以上：力学的エネルギーが 0 以上なので、無限遠まで行ける` : `力学的エネルギーが負：最高点（中心から ${f(St.rmax/R,2)}R）で止まって落ちてくる`, St.E >= 0 ? "--acc" : "--ui");
     // U(r) diagram
@@ -204,41 +231,44 @@ const escape = {
     disc(g, X(rr), Y(u), 4, css("--hl2"));
     g.font = numFont(11); g.fillStyle = css("--vel"); g.textAlign = "left"; g.fillText("運動エネルギー", Math.min(X(rr) + 6, gw - 80), (Y(u) + Y(St.E))/2);
     graph(ctx.graphs[1], {title:"高さ（中心から R の何倍）", unit:"", tmax:St.span/3600, t:St.tp/3600, ylo:0, series:[{pts:St.ts.map(p => [p[0], p[1]]), color:"--pos"}]});
-    ctx.ro(table([[`第1宇宙速度 √(${S("g")}${S("R")})`, `${f(Math.sqrt(GM/R)/1e3,2)} km/s`], [`第2宇宙速度 √(2${S("g")}${S("R")})`, `${f(ve,2)} km/s`], [`力学的エネルギー（1 kg あたり）`, `${f(St.E/1e7,3)} × 10⁷ J`], [`最高点（中心から）`, St.rmax === Infinity ? "無限遠" : `${f(St.rmax/R,3)} R`], [`いまの高さ・速さ`, `${f(St.r/R,2)} R・${f(St.v/1e3,2)} km/s`], [`経過時間`, `${f(St.tp/3600,2)} h`]]));
+    ctx.ro(table([[`第1宇宙速度 √(${S("g")}${S("R")})`, `${f(Math.sqrt(GM/R)/1e3,2)} km/s`], [`第2宇宙速度 √(2${S("g")}${S("R")})`, `${f(ve,2)} km/s`], [`力学的エネルギー（1 kg あたり）`, `${f(St.E/EU,3)} ${EUN}`], [`最高点（中心から）`, St.rmax === Infinity ? "無限遠" : `${f(St.rmax/R,3)} R`], [`いまの高さ・速さ`, `${f(St.r/R,2)} R・${f(St.v/1e3,2)} km/s`], [`経過時間`, `${f(St.tp/3600,2)} h`]]));
     ctx.eqs(`<p class="eq">½${S("v")}<sub>0</sub>² − ${S("G")}${S("M")}/${S("R")} ＝ ½${S("v")}² − ${S("G")}${S("M")}/${S("r")}（1 kg あたり）　最高点：${S("v")} ＝ 0</p><p class="eq">右の図：緑の水平線（全エネルギー）と紫の曲線（位置エネルギー）の差が運動エネルギー。緑の線が 0 以上なら、どこまでも曲線より上にあり、止まらない。</p>`);
   },
   asks:[
-    ["v₀ ＝ 7.9 km/s で打ち上げよう。最高点はどこか。", "中心から 2R（地表から高さ R）。mgh で計算すると √(2gR) が必要に見えるが、重力が弱くなるので √(gR) でよい。"],
+    ["中心天体が地球のとき、v₀ ＝ 7.9 km/s で打ち上げよう。最高点はどこか。", "中心から 2R（地表から高さ R）。mgh で計算すると √(2gR) が必要に見えるが、重力が弱くなるので √(gR) でよい。"],
     ["v₀ ＝ 11.2 km/s で、右の図の緑の線はどこにあるか。", "ちょうど 0。位置エネルギーの曲線は 0 に近づくだけなので、運動エネルギーが 0 になる点がない（無限遠まで行ける）。"],
-    ["v₀ を 11.0 km/s と 11.4 km/s で比べよう。", "11.0 では非常に高く上がって戻ってくる。11.4 では戻らない。"]
+    ["v₀ を 11.0 km/s と 11.4 km/s で比べよう。", "11.0 では非常に高く上がって戻ってくる。11.4 では戻らない。"],
+    ["中心天体を月・火星・木星などにかえよう（v₀ は自動でその天体の第2宇宙速度になる）。第2宇宙速度は天体によってどう違うか。", "√(2GM/R) なので、質量が大きく半径が小さいほど大きい。月 約2.4、火星 約5.0、金星 約10.4、地球 約11.2、木星 約59.5、太陽 約617 km/s。月から打ち上げるのは地球よりずっと楽で、木星や太陽は桁ちがいに大きい。"]
   ]
 };
 
 /* ---------- 軌道の変更（ホーマン遷移） ---------- */
 const GMS = 1.327e20, AU = 1.496e11;
 const XUNIT = {
-  sat:{GM:GM, L:R, tU:3600, tn:"h", eU:1e7, en:"×10⁷ J", body:"地球", Ln:"R", tgt:"目標の衛星"},
-  sun:{GM:GMS, L:AU, tU:86400, tn:"日", eU:1e8, en:"×10⁸ J", body:"太陽", Ln:"天文単位", tgt:"目標の惑星"}
+  sun:{key:"sun", GM:GMS, L:AU, tU:86400, tn:"日", eU:1e8, en:"×10⁸ J", body:"太陽", ch:"日", Ln:"天文単位", tgt:"目標の惑星"}
 };
 const XEX = {leo:{u:"sat", r1:1.1, r2:6.6, tg:"静止衛星"}, geo:{u:"sat", r1:6.6, r2:1.1, tg:"低軌道の衛星"}, mars:{u:"sun", r1:1.0, r2:1.524, tg:"火星"}, venus:{u:"sun", r1:1.0, r2:0.723, tg:"金星"}};
 let xLast = null;
+const satUnit = () => ({key:"sat", GM:GM, L:R, tU:3600, tn:"h", eU:EU, en:EUN, body:BODY.n, ch:BODY.ch, Ln:"R", tgt:"目標の衛星"});
+const exDefaults = (ex, body) => { const e = XEX[ex]; if(e.u !== "sat" || body === "earth") return [e.r1, e.r2]; return ex === "leo" ? [1.1, 4.0] : [4.0, 1.1]; };
 function xcalc(P){
-  const ex = XEX[P.ex] || XEX.leo, U = XUNIT[ex.u], r1 = P.r1*U.L, r2 = P.r2*U.L, a = (r1 + r2)/2, GMc = U.GM;
+  const ex = XEX[P.ex] || XEX.leo, U = ex.u === "sat" ? satUnit() : XUNIT.sun, r1 = P.r1*U.L, r2 = P.r2*U.L, a = (r1 + r2)/2, GMc = U.GM;
   const v1 = Math.sqrt(GMc/r1), v2 = Math.sqrt(GMc/r2), vp = Math.sqrt(GMc*(2/r1 - 1/a)), va = Math.sqrt(GMc*(2/r2 - 1/a));
   const Th = Math.PI*Math.sqrt(a**3/GMc), om1 = Math.sqrt(GMc/r1**3), om2 = Math.sqrt(GMc/r2**3);
-  return {ex, U, r1, r2, a, GMc, v1, v2, vp, va, d1:vp - v1, d2:v2 - va, Th, om1, om2, e:(r2 - r1)/(r1 + r2), lead:(l => l > Math.PI ? l - PI2 : l)((((Math.PI - om2*Th) % PI2) + PI2) % PI2)};
+  const tg = ex.u === "sat" && BODY !== BODIES.earth ? (P.ex === "leo" ? "目標の衛星" : "低軌道の衛星") : ex.tg;
+  return {ex, tg, U, r1, r2, a, GMc, v1, v2, vp, va, d1:vp - v1, d2:v2 - va, Th, om1, om2, e:(r2 - r1)/(r1 + r2), lead:(l => l > Math.PI ? l - PI2 : l)((((Math.PI - om2*Th) % PI2) + PI2) % PI2)};
 }
 const transfer = {
   label:"軌道の変更（人工衛星・惑星探査機）",
-  params:[["r1","出発の円軌道の半径 "+S("r")+"<sub>1</sub>（地球は R、太陽は天文単位）",0.3,10,0.05,"",2,1.1],["r2","到着の円軌道の半径 "+S("r")+"<sub>2</sub>",0.3,10,0.05,"",2,6.6]],
-  selects:[["ex","例",[["leo","人工衛星：低軌道 → 静止軌道（地球）"],["geo","人工衛星：静止軌道 → 低軌道（減速）"],["mars","探査機：地球 → 火星（太陽まわり）"],["venus","探査機：地球 → 金星（減速）"]],"leo"],["b2","到着点での噴射",[["on","する（円軌道にのる）"],["off","しない"]],"on"]],
+  params:[["r1","出発の円軌道の半径 "+S("r")+"<sub>1</sub>（人工衛星は中心天体の半径 R、探査機は天文単位）",0.3,10,0.05,"",2,1.1],["r2","到着の円軌道の半径 "+S("r")+"<sub>2</sub>",0.3,10,0.05,"",2,6.6]],
+  selects:[["body","中心天体（人工衛星の例で使う）",BODY_SEL[2],"earth"],["ex","例",[["leo","人工衛星：低軌道 → 高い軌道（地球なら静止軌道）"],["geo","人工衛星：高い軌道 → 低軌道（減速）"],["mars","探査機：地球 → 火星（太陽まわり）"],["venus","探査機：地球 → 金星（減速）"]],"leo"],["b2","到着点での噴射",[["on","する（円軌道にのる）"],["off","しない"]],"on"]],
   toggles:[["tgt","目標の天体（衛星・惑星）を表示",true],["area","面積速度（等しい時間の扇形）",false]],
   timed:true, graphs:3,
   legend:`<span><i style="background:var(--ink3)"></i>出発・到着の円軌道</span><span><i style="background:var(--hl2)"></i>遷移軌道（楕円）</span><span><i style="background:var(--pos)"></i>実際の軌跡</span><span><i style="background:var(--vel)"></i>速度</span><span><i style="background:var(--acc)"></i>万有引力</span><span><i style="background:var(--neg)"></i>噴射による速度の変化 Δ${S("v")}</span>`,
   reset(P, St){
-    if(xLast !== null && P.ex !== xLast){ const e = XEX[P.ex]; P.r1 = e.r1; P.r2 = e.r2; }
-    else if(xLast === null && P.ex !== "leo" && P.r1 === 1.1 && P.r2 === 6.6){ const e = XEX[P.ex]; P.r1 = e.r1; P.r2 = e.r2; }
-    xLast = P.ex;
+    setBody(P.body);
+    if((xLast !== null && (P.ex !== xLast || P.body !== tBody)) || (xLast === null && (P.ex !== "leo" || P.body !== "earth") && P.r1 === 1.1 && P.r2 === 6.6)){ [P.r1, P.r2] = exDefaults(P.ex, P.body); }
+    xLast = P.ex; tBody = P.body;
     if(XEX[P.ex].u === "sat"){ P.r1 = Math.max(P.r1, 1.02); P.r2 = Math.max(P.r2, 1.02); }
     const X = xcalc(P), phi0 = Math.max(0.15, Math.min(1.7, 0.3*X.Th*X.om1)), th0 = -phi0, v = X.v1;
     St.X = X; St.x = X.r1*Math.cos(th0); St.y = X.r1*Math.sin(th0); St.vx = -v*Math.sin(th0); St.vy = v*Math.cos(th0);
@@ -290,7 +320,7 @@ const transfer = {
     const cols = [pos, acc, pos]; let prevPh = -1; c.lineWidth = 2.2; const stp2 = Math.max(1, Math.floor(St.trace.length/2500));
     St.trace.forEach((q, i) => { if(i % stp2 && i !== St.trace.length - 1) return; if(q[2] !== prevPh){ if(prevPh >= 0) c.stroke(); c.strokeStyle = cols[q[2]]; c.beginPath(); c.moveTo(tf.X(q[0]), tf.Y(q[1])); prevPh = q[2]; } else c.lineTo(tf.X(q[0]), tf.Y(q[1])); }); c.stroke();
     // 中心の天体
-    if(U.body === "地球") earth(c, tf, ink2);
+    if(U.key === "sat") earth(c, tf, ink2);
     else { const gr = c.createRadialGradient(tf.X(0) - 3, tf.Y(0) - 3, 1, tf.X(0), tf.Y(0), 13); gr.addColorStop(0, "#fff2b0"); gr.addColorStop(1, "#e8a32e"); c.fillStyle = gr; c.beginPath(); c.arc(tf.X(0), tf.Y(0), 13, 0, PI2); c.fill(); label(c, "太陽", tf.X(0), tf.Y(0) + 24, ink2, "center", uiFont(11, true)); }
     // 噴射の位置と Δv
     const kd = 30;
@@ -312,7 +342,7 @@ const transfer = {
     if(T.tgt){
       const ta = St.tb1 + X.Th, thT = Math.PI - X.om2*(ta - St.tp), tx = tf.X(X.r2*Math.cos(thT)), ty = tf.Y(X.r2*Math.sin(thT));
       c.strokeStyle = vel; c.lineWidth = 2; c.beginPath(); c.arc(tx, ty, 8, 0, PI2); c.stroke(); c.fillStyle = "rgba(255,255,255,0.7)"; c.fill();
-      label(c, X.ex.tg, tx, ty - 15, vel, "center", uiFont(11, true));
+      label(c, X.tg, tx, ty - 15, vel, "center", uiFont(11, true));
     }
     // 探査機・衛星
     const sx = tf.X(St.x), sy = tf.Y(St.y), r = Math.hypot(St.x, St.y), v = Math.hypot(St.vx, St.vy), vmax = Math.max(X.vp, X.v1, X.v2, X.va);
@@ -322,20 +352,20 @@ const transfer = {
     arrow(c, sx, sy, sx - St.x/r*ga, sy + St.y/r*ga, acc, 2.2);
     disc(c, sx, sy, 6, pos);
     const ph = St.phase, isUp = X.e >= 0;
-    ctx.banner(ph === 0 ? `出発の円軌道（速さ ${f(X.v1/1e3,2)} km/s）：①の位置で ${X.d1 >= 0 ? "加速" : "減速"}する` : ph === 1 ? (P.b2 === "on" ? `遷移軌道（楕円）：${isUp ? "遠" : "近"}${U.body === "地球" ? "地点" : "日点"}（${f(X.r2/U.L,2)} ${U.Ln}）に着いたら②で${X.d2 >= 0 ? "加速" : "減速"}する` : "遷移軌道（楕円）のまま回りつづける（②の噴射をしない）") : `到着の円軌道（速さ ${f(X.v2/1e3,2)} km/s）：目標と同じ軌道にのった`, "--ui");
+    ctx.banner(ph === 0 ? `出発の円軌道（速さ ${f(X.v1/1e3,2)} km/s）：①の位置で ${X.d1 >= 0 ? "加速" : "減速"}する` : ph === 1 ? (P.b2 === "on" ? `遷移軌道（楕円）：${isUp ? "遠" : "近"}${U.ch + "点"}（${f(X.r2/U.L,2)} ${U.Ln}）に着いたら②で${X.d2 >= 0 ? "加速" : "減速"}する` : "遷移軌道（楕円）のまま回りつづける（②の噴射をしない）") : `到着の円軌道（速さ ${f(X.v2/1e3,2)} km/s）：目標と同じ軌道にのった`, "--ui");
     const ts = St.ts, tm = St.span/U.tU, tc = St.tp/U.tU;
     graph(ctx.graphs[0], {title:`中心からの距離 r-t（${U.Ln}）`, unit:"", tmax:tm, t:tc, ylo:0, series:[{pts:ts.map(q => [q[0], q[1]]), color:"--pos"}]});
     graph(ctx.graphs[1], {title:"速さ v-t", unit:"km/s", tmax:tm, t:tc, ylo:0, series:[{pts:ts.map(q => [q[0], q[2]]), color:"--vel"}]});
     graph(ctx.graphs[2], {title:`力学的エネルギー（${U.en}/kg）`, unit:"", tmax:tm, t:tc, series:[{pts:ts.map(q => [q[0], q[3]]), color:"--acc"}]});
     const e1 = -X.GMc/(2*X.r1), et = -X.GMc/(2*X.a), e2 = -X.GMc/(2*X.r2), fm = x => f(x/U.eU, 2);
     const Tu = x => `${f(x/U.tU, 2)} ${U.tn}`;
-    const rows = [[`出発の円軌道の速さ √(${S("G")}${S("M")}/${S("r")}<sub>1</sub>)`, `${f(X.v1/1e3,2)} km/s`], [`① 噴射後の速さ（${isUp ? "近" : "遠"}${U.body === "地球" ? "地点" : "日点"}）`, `${f(X.vp/1e3,2)} km/s`], [`① の速さの変化 Δ${S("v")}<sub>1</sub>`, `${X.d1 >= 0 ? "＋" : "−"}${f(Math.abs(X.d1)/1e3,2)} km/s`],
-      [`遷移軌道の${isUp ? "遠" : "近"}${U.body === "地球" ? "地点" : "日点"}での速さ`, `${f(X.va/1e3,2)} km/s`], [`到着の円軌道の速さ √(${S("G")}${S("M")}/${S("r")}<sub>2</sub>)`, `${f(X.v2/1e3,2)} km/s`], [`② の速さの変化 Δ${S("v")}<sub>2</sub>`, `${X.d2 >= 0 ? "＋" : "−"}${f(Math.abs(X.d2)/1e3,2)} km/s`],
-      [`Δ${S("v")} の合計 |Δ${S("v")}<sub>1</sub>| ＋ |Δ${S("v")}<sub>2</sub>|`, `${f((Math.abs(X.d1) + Math.abs(X.d2))/1e3,2)} km/s`], [`遷移にかかる時間 π√(${S("a")}³/${S("G")}${S("M")})`, Tu(X.Th)], [`出発のときの ${X.ex.tg} の位置（出発する側から見て）`, `${X.lead >= 0 ? "前方" : "後方"} ${f(Math.abs(X.lead)*180/Math.PI,1)}°`],
+    const rows = [[`出発の円軌道の速さ √(${S("G")}${S("M")}/${S("r")}<sub>1</sub>)`, `${f(X.v1/1e3,2)} km/s`], [`① 噴射後の速さ（${isUp ? "近" : "遠"}${U.ch + "点"}）`, `${f(X.vp/1e3,2)} km/s`], [`① の速さの変化 Δ${S("v")}<sub>1</sub>`, `${X.d1 >= 0 ? "＋" : "−"}${f(Math.abs(X.d1)/1e3,2)} km/s`],
+      [`遷移軌道の${isUp ? "遠" : "近"}${U.ch + "点"}での速さ`, `${f(X.va/1e3,2)} km/s`], [`到着の円軌道の速さ √(${S("G")}${S("M")}/${S("r")}<sub>2</sub>)`, `${f(X.v2/1e3,2)} km/s`], [`② の速さの変化 Δ${S("v")}<sub>2</sub>`, `${X.d2 >= 0 ? "＋" : "−"}${f(Math.abs(X.d2)/1e3,2)} km/s`],
+      [`Δ${S("v")} の合計 |Δ${S("v")}<sub>1</sub>| ＋ |Δ${S("v")}<sub>2</sub>|`, `${f((Math.abs(X.d1) + Math.abs(X.d2))/1e3,2)} km/s`], [`遷移にかかる時間 π√(${S("a")}³/${S("G")}${S("M")})`, Tu(X.Th)], [`出発のときの ${X.tg} の位置（出発する側から見て）`, `${X.lead >= 0 ? "前方" : "後方"} ${f(Math.abs(X.lead)*180/Math.PI,1)}°`],
       [`力学的エネルギー（${U.en} /kg）出発 → 遷移 → 到着`, `${fm(e1)} → ${fm(et)} → ${fm(e2)}`]];
     if(St.tb2 != null) rows.push([`シミュレーションで測った遷移時間`, Tu(St.tb2 - St.tb1)]);
     ctx.ro(table(rows));
-    const gmTxt = U.body === "地球" ? `${S("G")}${S("M")} ≒ 4.0 × 10¹⁴ m³/s²（${S("R")} ＝ 6.4 × 10⁶ m）` : `${S("G")}${S("M")}<sub>太陽</sub> ≒ 1.33 × 10²⁰ m³/s²（1 天文単位 ＝ 1.50 × 10¹¹ m）`;
+    const gmTxt = U.key === "sat" ? `${S("G")}${S("M")} ≒ ${sci(U.GM)} m³/s²（${S("R")} ＝ ${sci(U.L)} m、${U.body}）` : `${S("G")}${S("M")}<sub>太陽</sub> ≒ 1.33 × 10²⁰ m³/s²（1 天文単位 ＝ 1.50 × 10¹¹ m）`;
     ctx.eqs(`<p class="eq">${gmTxt}。<b>円軌道の速さ</b> ${S("v")} ＝ √(${S("G")}${S("M")}/${S("r")})（半径が大きいほど遅い）、力学的エネルギー（1 kg）${S("E")} ＝ −${S("G")}${S("M")}/(2${S("r")})</p>
 <p class="eq"><b>遷移軌道</b>は、${S("r")}<sub>1</sub> と ${S("r")}<sub>2</sub> を結ぶ楕円（長軸 ＝ ${S("r")}<sub>1</sub> ＋ ${S("r")}<sub>2</sub>、半長軸 ${S("a")} ＝ (${S("r")}<sub>1</sub> ＋ ${S("r")}<sub>2</sub>)/2 ＝ ${f(X.a/U.L,3)} ${U.Ln}）。エネルギー保存と面積速度一定（${S("r")}<sub>1</sub>${S("v")}<sub>p</sub> ＝ ${S("r")}<sub>2</sub>${S("v")}<sub>a</sub>）から</p>
 <p class="eq">${S("v")}<sub>${isUp ? "p" : "a"}</sub> ＝ √(2${S("G")}${S("M")}${S("r")}<sub>2</sub> / (${S("r")}<sub>1</sub>(${S("r")}<sub>1</sub> ＋ ${S("r")}<sub>2</sub>))) ＝ ${f(X.vp/1e3,2)} km/s、${S("v")}<sub>${isUp ? "a" : "p"}</sub> ＝ √(2${S("G")}${S("M")}${S("r")}<sub>1</sub> / (${S("r")}<sub>2</sub>(${S("r")}<sub>1</sub> ＋ ${S("r")}<sub>2</sub>))) ＝ ${f(X.va/1e3,2)} km/s。Δ${S("v")}<sub>1</sub> ＝ ${f(X.vp/1e3,2)} − ${f(X.v1/1e3,2)} ＝ ${f(X.d1/1e3,2)} km/s、Δ${S("v")}<sub>2</sub> ＝ ${f(X.v2/1e3,2)} − ${f(X.va/1e3,2)} ＝ ${f(X.d2/1e3,2)} km/s</p>
@@ -347,6 +377,7 @@ const transfer = {
     ["速さのグラフを見よう。高い軌道は速さが遅いのに、そこへ行くために加速するのはなぜか。", "加速は運動エネルギーを増やし、遠ざかる間に位置エネルギーに変わる。上った先（遠地点）では速さが遅くなるが、力学的エネルギーは出発の円軌道より大きい。到着後の円軌道の速さは出発より小さいが、エネルギーはさらに大きい。"],
     ["「到着点での噴射」を「しない」にしよう。探査機はどうなるか。", "遠地点を通過して楕円軌道を回りつづけ、近地点にもどる。②の加速でエネルギーを足さないと円軌道にならない。"],
     ["「静止軌道 → 低軌道（減速）」にしよう。噴射の向きと、速さのようすを比べよう。", "進行方向と逆向きに噴射（減速）。楕円の近地点（低軌道の高さ）に向かって落ちるように進み、速さは増していく。近地点で再び減速（①と逆の関係）して円軌道にのる。エネルギーは下がる。"],
+    ["「人工衛星」の例で、中心天体を月や火星にかえよう。同じ r₁、r₂（R の何倍）のとき、Δv と遷移時間はどう変わるか。", "Δv は √(GM/R) に比例して小さくなる（月は地球の約 1/5）。遷移時間は √(R³/GM) に比例するので、平均密度が小さい天体ほど長くなる。式の形（Δv の比、時間の比）は同じ。"],
     ["「探査機：地球 → 火星」にしよう。出発のとき、火星は地球よりどれだけ先にいればよいか。", "約 44°。遷移にかかる時間（約 259 日）のあいだに、火星（周期 687 日）が進む角度を引いて、ちょうど到着点に着くようにする。"]
   ]
 };

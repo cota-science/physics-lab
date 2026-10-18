@@ -27,7 +27,7 @@ window.UNIT_LIST = [
     { id: "circular",   title: "4 円運動と慣性力",          file: "units/circular.js" },
     { id: "anim-shm",   title: "▶ 単振動ラボ",            href: "anim/shm.html#circle", note: "等速円運動の影が単振動（x・v・a のグラフが連動）、ばね振り子（水平・鉛直）とエネルギー、単振り子（振れ角が大きいと周期が長くなる）、浮力と重力の単振動（水に浮かぶ物体）" },
     { id: "shm",        title: "5 単振動",                  file: "units/shm.js" },
-    { id: "anim-gravitation", title: "▶ 万有引力ラボ",     href: "anim/gravitation.html#orbit", note: "人工衛星の軌道（円・楕円・放物線・双曲線、等しい時間の扇形で面積速度一定、エネルギーのグラフ）、ケプラーの第3法則、打ち上げと第2宇宙速度（U(r) ＝ −GM/r の図）、軌道の変更（人工衛星の低軌道→静止軌道、地球→火星の探査機。2回の噴射とΔv・遷移時間・エネルギー）" },
+    { id: "anim-gravitation", title: "▶ 万有引力ラボ",     href: "anim/gravitation.html#orbit", note: "人工衛星の軌道（円・楕円・放物線・双曲線、等しい時間の扇形で面積速度一定、エネルギーのグラフ）、ケプラーの第3法則、打ち上げと第2宇宙速度（U(r) ＝ −GM/r の図）、軌道の変更（人工衛星の低軌道→静止軌道、地球→火星の探査機。2回の噴射とΔv・遷移時間・エネルギー）。軌道・打ち上げ・軌道の変更では中心天体（地球・月・金星・火星・木星・太陽）を切りかえられる" },
     { id: "gravitation",title: "6 万有引力",                file: "units/gravitation.js" },
     { id: "anim-gas",   title: "▶ 気体分子ラボ",          href: "anim/gas.html#kinetic", note: "分子の運動と圧力（壁が受ける力積から圧力を測る、速さの分布）、p-V 図と状態変化（定積・定圧・等温・断熱、面積 ＝ 仕事、Q ＝ ΔU ＋ W′）、熱機関のサイクルと熱効率" },
     { id: "gas",        title: "7 気体分子の運動",          file: "units/gas.js" }

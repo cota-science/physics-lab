@@ -70,6 +70,7 @@ URL の `#` 以降で、モードと値を指定して開けます。問題文�
 - `anim/shm.html#spring&k=49&m=0.5&A=0.05&dir=v`
 - `anim/shm.html#buoy&rb=600&L=0.2&Sa=0.01&A=0.05&rho=1000`
 - `anim/gravitation.html#orbit&r0=2&v0=5.6`
+- `anim/gravitation.html#orbit&body=moon`（body は earth／moon／venus／mars／jupiter／sun。#orbit・#escape・#transfer で使える）
 - `anim/gravitation.html#transfer&ex=mars&r1=1&r2=1.524`（ex は leo／geo／mars／venus、b2=off で到着点の噴射なし）
 - `anim/gas.html#pv&proc=p&p1=1&V1=24.9&V2=33.2`（proc ＝ v 定積・p 定圧・T 等温・a 断熱）
 
