@@ -12,6 +12,8 @@ const KEEP = new Set("sin cos tan cot sec csc lim log ln exp max min deg arcsin 
 const UPPER = new Set("F T L E R M N I U K V S W".split(" "));
 const GREEK = new Set("θφωαβγδελμρστηκνξζψϕ".split(""));
 const SKIP = "i,em,.s,.va,.vb,.qv,.qb,.qu,.keep,script,style,input,textarea,select,option,code,pre,svg,canvas,sub.keep";
+const esc = t => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const unesc = t => t.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 function convert(text){
   if(/^\s*[A-Z]\s*$/.test(text)) return null;                      // 選択肢の点名・粒子名だけのテキスト
   if(/^\s*(?:N|J|W|m|s|kg|Hz|Pa|V|A|C|K|N·m|N·s|m\/s|m\/s²|kg·m\/s)\s*$/.test(text)) return null;
@@ -44,10 +46,10 @@ function convert(text){
         } else italic = (UPPER.has(w) || (w === "A" && /[+＋−-]$/.test(before))) && !/点\s?$/.test(before) && !/^\s?点/.test(text.slice(j, j + 2)) && !/[A-Z][・、,]\s?$/.test(before) && !/^[・、,]\s?[A-Z](?![A-Za-z])/.test(text.slice(j, j + 3));
       } else {
         // 2〜4字
-        if(/^[NTFfWS][AB]$/.test(w)){ out += text.slice(last, i) + `<span class="@">${w[0]}</span>${w[1]}`; last = j; changed = true; prevUnit = false; prevEnd = j; continue; }
+        if(/^[NTFfWS][AB]$/.test(w)){ out += esc(text.slice(last, i)) + `<span class="@">${w[0]}</span>${w[1]}`; last = j; changed = true; prevUnit = false; prevEnd = j; continue; }
         else if(/^(GM|RT)$/.test(w)) italic = true;
         else if(/^[A-Z]+$/.test(w)) italic = false;                       // AB など（点・粒子の名前）
-        else if(/^d[txyzvrm]$/.test(w)){ out += text.slice(last, i) + "d" + `<span class="@">${w[1]}</span>`; last = j; changed = true; prevUnit = false; prevEnd = j; continue; }
+        else if(/^d[txyzvrm]$/.test(w)){ out += esc(text.slice(last, i)) + "d" + `<span class="@">${w[1]}</span>`; last = j; changed = true; prevUnit = false; prevEnd = j; continue; }
         else italic = /^[mgakvtxyhrlnfpqe]+$/.test(w) || (/[a-z]/.test(w) && /[A-Z]/.test(w) && /^[mgakvtxyhrlnfpqeGMRTVUFELIKS]+$/.test(w));
       }
     } else {
@@ -55,10 +57,20 @@ function convert(text){
       italic = [...w].every(c => GREEK.has(c)) && !(w.length === 1 && w === "μ" && prevNum);
     }
     prevUnit = unit; prevEnd = j;
-    if(italic){ out += text.slice(last, i) + `<span class="@">${w}</span>`; last = j; changed = true; }
+    if(italic){ out += esc(text.slice(last, i)) + `<span class="@">${w}</span>`; last = j; changed = true; }
   }
   if(!changed) return null;
-  return out + text.slice(last);
+  return out + esc(text.slice(last));
+}
+/* v_B のような添字（_ のあと）は <sub> にして、残りの部分を convert する */
+function convertAll(text){
+  if(!/[A-Za-zθφωαβγδελμρστ]_[A-Za-z0-9′']/.test(text)) return convert(text);
+  let any = false;
+  const out = text.split(/(?<=[A-Za-zθφωαβγδελμρστ′'])(_[A-Za-z0-9′']+)/).map(part => {
+    if(/^_[A-Za-z0-9′']+$/.test(part)){ any = true; return `<sub>${part.slice(1)}</sub>`; }
+    const h = convert(part); if(h != null) any = true; return h == null ? esc(part) : h;
+  }).join("");
+  return any ? out : null;
 }
 function nodes(root){
   const res = [], w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -74,16 +86,16 @@ function run(root, cls){
   if(!root) return 0;
   let k = 0;
   for(const n of nodes(root)){
-    const h = convert(n.nodeValue);
+    const h = convertAll(n.nodeValue);
     if(h == null) continue;
     const span = document.createElement("span");
     span.className = "keep";
     span.innerHTML = h.replace(/class="@"/g, `class="${cls}" data-auto="1"`);
-    n.replaceWith(...span.childNodes); k++;
+    n.replaceWith(span); k++;   // 1つの要素にまとめる（親が flex でも文が1つの塊のままになる）
   }
   return k;
 }
-function scan(root){ return nodes(root).map(n => [n.nodeValue.trim().slice(0, 60), convert(n.nodeValue)]).filter(x => x[1]); }
+function scan(root){ return nodes(root).map(n => [n.nodeValue.trim().slice(0, 60), convertAll(n.nodeValue)]).filter(x => x[1]); }
 /* キャンバスの文字：通常フォントで描く文字列の中の物理量だけをイタリックで描きわける（図中の x-t〔m〕, S 5.87 N, a ＝ 3.0 m/s² など）。
    ctx.font が最初から italic のとき（記号そのものを描く呼び出し）は何もしない。 */
 const segCache = new Map();
@@ -93,8 +105,8 @@ function segs(text){
   const h = convert(text);
   if(h != null){
     r = []; const re = /<span class="@">([^<]*)<\/span>/g; let last = 0, m;
-    while((m = re.exec(h))){ if(m.index > last) r.push([h.slice(last, m.index), false]); r.push([m[1], true]); last = m.index + m[0].length; }
-    if(last < h.length) r.push([h.slice(last), false]);
+    while((m = re.exec(h))){ if(m.index > last) r.push([unesc(h.slice(last, m.index)), false]); r.push([unesc(m[1]), true]); last = m.index + m[0].length; }
+    if(last < h.length) r.push([unesc(h.slice(last)), false]);
   }
   if(segCache.size > 3000) segCache.clear();
   segCache.set(text, r); return r;
